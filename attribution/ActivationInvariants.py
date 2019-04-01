@@ -91,7 +91,7 @@ class Invariant(object):
     def __str__(self):
         s = "\nor\n".join(["(" + str(clause) + ")" for clause in self.clauses])
         s += "\n\t--> Q = {}".format(self.Q)
-        s += "\n\nsupport={:.3}, precision={:.3}".format(self.support, self.precision)
+        s += "\nsupport={:.3}, precision={:.3}".format(self.support, self.precision)
         return s
 
 
@@ -145,6 +145,8 @@ class ActivationInvariants(object):
         self._feat_ranges = feat_ranges
 
         self._is_compiled = True
+
+        return self
 
     def get_invariants(self, x, min_support=None, min_precision=1.0, **kwargs):
 

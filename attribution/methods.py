@@ -46,7 +46,7 @@ class AumannShapley(AttributionMethod):
                 n_outs = int(np.prod(K.int_shape(self.layer.output)[1:]))
                 layer_outs = K.batch_flatten(self.layer.output)
                 layer_grads = [inner_grad]
-                self.attribution_units = [layer_outs[:,i] for i in range(n_outs)]
+                self.attribution_units = K.transpose(layer_outs) #[layer_outs[:,i] for i in range(n_outs)]
                 post_fn = lambda r: r[0]
                 self.p_fn = lambda x: x
             else:
@@ -71,6 +71,7 @@ class AumannShapley(AttributionMethod):
         if self.layer != self.model.layers[0]:
             feats_f = K.function([self.model.input], [self.layer.output])
             self.get_features = lambda x: np.array(feats_f([x]))[0]
+
         else:
             self.get_features = lambda x: x
 
@@ -177,7 +178,7 @@ class Conductance(AttributionMethod):
         elif K.backend() == "tensorflow":
             outer_grads = [layer_grads[:,i] * K.sum(self.post_grad(K.gradients(K.sum(layer_outs[:,i]), self.model.input)), axis=(1,2,3))
                            for i in range(n_outs)]
-            post_fn = lambda r: np.array(r) #np.swapaxes(np.array(r),0,1)
+            post_fn = lambda r: np.array(np.transpose(r)) #np.swapaxes(np.array(r),0,1)
 
         if self.model.uses_learning_phase:
             grad_f = K.function([self.model.input, K.learning_phase()], outer_grads)
@@ -208,11 +209,11 @@ class Conductance(AttributionMethod):
 
         attributions = np.zeros((instance.shape[0],self.n_outs)).astype(np.float32)
 
-        for a in range(len(x)):
-            inst_a = instance[a][np.newaxis]-baseline
+        for a in range(len(instance)):
+            inst_a = instance[a][np.newaxis]-baseline[a]
             scale = 1./resolution
-            inputs = baseline + np.dot(np.repeat(inst_a, resolution, axis=0).T, np.arange(scale,1+scale,step=scale)).T
-            attributions[a] = self.dF(inputs).mean(axis=0) #*np.sum(inst_a)
+            inputs = baseline[a] + np.dot(np.repeat(inst_a, resolution, axis=0).T, np.arange(scale,1+scale,step=scale)).T
+            attributions[a] = self.dF(np.expand_dims(inputs, 0)).mean(axis=0)*np.sum(inst_a)
 
         if match_layer_shape and np.prod(K.int_shape(self.layer.output)[1:])*len(instance) == np.prod(attributions.shape):
             attributions = attributions.reshape((len(x),)+K.int_shape(self.layer.output)[1:])
@@ -238,12 +239,17 @@ class Activation(AttributionMethod):
         if K.ndim(self.layer.output) == 2:
             n_outs = K.int_shape(self.layer.output)[1]
             layer_outs = [self.layer.output[:,i] for i in range(n_outs)]
+            post_fn = lambda r: np.swapaxes(r,0,1)
+            self.attribution_units = layer_outs
                         
         # Get outputs for convolutional intermediate layers
         elif K.ndim(self.layer.output) == 4:
             if self.agg_fn is None:
                 n_outs = int(np.prod(K.int_shape(self.layer.output)[1:]))
-                layer_outs = [K.batch_flatten(self.layer.output)[:,i] for i in range(n_outs)]
+                # K.batch_flatten seems really slow at times, so we'll save the reshape for numpy
+                layer_outs = [self.layer.output]
+                post_fn = lambda r: r[0].reshape((len(r[0]), -1))
+                self.attribution_units = K.transpose(K.batch_flatten(self.layer.output))
             else:
                 # If the aggregation function is given, treat each filter as a unit of attribution
                 if K.image_data_format() == 'channels_first':
@@ -253,23 +259,20 @@ class Activation(AttributionMethod):
                     n_outs = K.int_shape(self.layer.output)[3]
                     sel_fn = lambda g, i: self.agg_fn(g[:,:,:,i], axis=(1,2))
                 layer_outs = [sel_fn(self.layer.output, i) for i in range(n_outs)]
-            
+                post_fn = lambda r: np.swapaxes(r,0,1)
+                self.attribution_units = layer_outs
         else:
             assert False, "Unsupported tensor shape: ndim=%d" % K.ndim(self.layer.output)
-
-        post_fn = lambda r: np.swapaxes(r,0,1)
 
         if self.model.uses_learning_phase:
             grad_f = K.function([self.model.input, K.learning_phase()], layer_outs)
             self.dF = lambda inp: post_fn(np.array(grad_f([inp, 0])))
         else:
             grad_f = K.function([self.model.input], layer_outs)
-            self.grad_f = grad_f
             self.dF = lambda inp: post_fn(np.array(grad_f([inp])))
 
         self.is_compiled = True
         self.n_outs = n_outs
-        self.attribution_units = layer_outs
             
         return self
 
