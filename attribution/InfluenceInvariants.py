@@ -5,10 +5,10 @@ import keras.backend as K
 
 from sklearn import tree
 
-from .methods import Activation
+from .methods import AumannShapley
 from .invariant import Literal, Clause, Invariant
 
-class ActivationInvariants(object):
+class InfluenceInvariants(object):
 
     def __init__(self, model, layers=None, agg_fn=K.max, Q=None):
         self.model = model
@@ -21,17 +21,17 @@ class ActivationInvariants(object):
         if Q is None:
             self.Q = K.argmax(model.output, axis=1)
 
-        self._attributers = [Activation(model, layer, agg_fn=agg_fn) for layer in self.layers]
+        self._attributers = [AumannShapley(model, layer, agg_fn=agg_fn) for layer in self.layers]
         self._is_compiled = False
 
-    def _get_activations(self, x):
+    def _get_influence(self, x):
         if not self._is_compiled:
             self.compile()
         if np.ndim(x) == K.ndim(self.model.input) - 1:
             x = np.expand_dims(x, axis=0)
 
         acts = np.concatenate(
-                [np.where(self._attributers[i].get_attributions(x) != 0., 1, 0).reshape(len(x), -1)
+                [np.sign(self._attributers[i].get_attributions(x)).reshape(len(x), -1)
                     for i in range(len(self._attributers))], axis=1)
 
         qs = self.QF(x)
@@ -72,7 +72,7 @@ class ActivationInvariants(object):
                     return i, self.layers[i], feat-l
             return None
 
-        feats, y = self._get_activations(x)
+        feats, y = self._get_influence(x)
         clf = tree.DecisionTreeClassifier(**kwargs)
         clf = clf.fit(feats, y)
 
