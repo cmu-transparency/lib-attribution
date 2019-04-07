@@ -75,7 +75,7 @@ class AumannShapley(AttributionMethod):
         else:
             self.get_features = lambda x: x
 
-        if self.model.uses_learning_phase:
+        if hasattr(self.model, 'uses_learning_phase') and self.model.uses_learning_phase:
             grad_f = K.function([self.layer.output, K.learning_phase()], layer_grads)
             self.dF = lambda inp: post_fn(np.array(grad_f([inp, 0])))
         else:
@@ -180,7 +180,7 @@ class Conductance(AttributionMethod):
                            for i in range(n_outs)]
             post_fn = lambda r: np.array(np.transpose(r)) #np.swapaxes(np.array(r),0,1)
 
-        if self.model.uses_learning_phase:
+        if hasattr(self.model, 'uses_learning_phase') and self.model.uses_learning_phase:
             grad_f = K.function([self.model.input, K.learning_phase()], outer_grads)
             self.dF = lambda inp: post_fn(grad_f([inp, 0]))
         else:
@@ -264,7 +264,7 @@ class Activation(AttributionMethod):
         else:
             assert False, "Unsupported tensor shape: ndim=%d" % K.ndim(self.layer.output)
 
-        if self.model.uses_learning_phase:
+        if hasattr(self.model, 'uses_learning_phase') and self.model.uses_learning_phase:
             grad_f = K.function([self.model.input, K.learning_phase()], layer_outs)
             self.dF = lambda inp: post_fn(np.array(grad_f([inp, 0])))
         else:
