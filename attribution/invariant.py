@@ -66,22 +66,40 @@ class Invariant(object):
         self.support = support
         self.precision = precision
         self.model = model
+        self._T = None
+        self._exe = None
 
     def add_clause(self, clause, copy_self=False):
         t = copy.deepcopy(self) if copy_self else self
         t.clauses.append(clause)
+
+        self._T = None
+        self._exe = None
+
         return t
 
     def get_tensor(self, attributers=None):
-        inv = [clause.get_tensor(attributers) for clause in self.clauses]
+        if self._T is None:
+            inv = [clause.get_tensor(attributers) for clause in self.clauses]
+            self._T = K.any(K.concatenate(inv, axis=1), axis=1)
 
-        return K.any(K.concatenate(inv, axis=1), axis=1)
+        return self._T
 
     def get_executable(self, attributers=None):
-        t = self.get_tensor(attributers=attributers)
-        exe = K.function([self.model.input], [t])
+        if self._exe is None:
+            if self._T is None:
+                self.get_tensor(attributers=attributers)
+            exe = K.function([self.model.input], [self._T])
+            self._exe = lambda x: exe([x])[0]
 
-        return lambda x: exe([x])[0]
+        return self._exe
+
+    def eval(self, x, attributers=None):
+        if self._exe is None:
+            self.get_executable(attributers=attributers)
+        if np.ndim(x) == K.ndim(self.model.input) - 1:
+            x = np.expand_dims(x, 0)
+        return self._exe(x)
 
     def __str__(self):
         s = "\nor\n".join(["(" + str(clause) + ")" for clause in self.clauses])
