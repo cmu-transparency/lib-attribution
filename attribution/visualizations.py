@@ -79,11 +79,13 @@ class TopKWithBlur(VisualizationMethod):
                 input_attrs = input_attrs.mean(axis=2)
             input_attrs = np.abs(input_attrs)
             input_attrs = np.clip(input_attrs/np.percentile(input_attrs, 99), 0., 1.)
-            input_attrs = ndimage.filters.gaussian_filter(input_attrs, self.sigma)
+            if self.sigma > 0:
+                input_attrs = ndimage.filters.gaussian_filter(input_attrs, self.sigma)
 
             thresh = np.percentile(input_attrs, self.percentile)
             mask = (input_attrs > thresh).astype('float32')
-            mask = ndimage.filters.gaussian_filter(mask, 2)
+            if self.sigma > 0:
+                mask = ndimage.filters.gaussian_filter(mask, 2)
             mask = np.clip(mask + self.alpha, 0., 1.)
             if K.image_data_format() == 'channels_first':
                 mask = np.repeat(np.expand_dims(mask, 0), 3, axis=0)

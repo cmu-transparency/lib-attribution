@@ -254,7 +254,7 @@ class InternalInfluence(AttributionMethod):
         if baseline is None:
             baseline = self.get_features(np.zeros_like(instance))
 
-        elif baseline.shape != instance.shape
+        elif baseline.shape != instance.shape:
             raise ValueError('Shape of `baseline` must match internal layer.')
 
         attributions = np.zeros_like(self.p_fn(instance))

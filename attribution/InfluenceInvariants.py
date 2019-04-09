@@ -84,6 +84,8 @@ class InfluenceInvariants(object):
             node, clause = stack.pop()
             if(clf.tree_.children_left[node] != clf.tree_.children_right[node]):
                 layer, _, unit = map_feat_to_layer(clf.tree_.feature[node])
+                # IMPORTANT: This is currently wrong, needs to be fixed so that
+                # au returns the *attribution* (not activation) of the appropriate unit
                 au = self._attributers[layer].attribution_units[unit]
                 lit_f = Literal(self.layers[layer], unit, 0, attribution_unit=au)
                 lit_t = Literal(self.layers[layer], unit, 1, attribution_unit=au)
