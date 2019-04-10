@@ -7,8 +7,11 @@ import numpy as np
 
 import keras
 
+from keras.layers import Input
+
 from .AttributionMethod import AttributionMethod
 
+from .distributions import Doi
 from .quantities import Qoi
 
 
@@ -24,6 +27,7 @@ class InternalInfluence(AttributionMethod):
             layer, 
             agg_fn=K.max, 
             Q=None, 
+            D='linear_interp',
             multiply_activation=True):
         '''
         Parameters
@@ -46,12 +50,15 @@ class InternalInfluence(AttributionMethod):
             given integer. Otherwise the quantity of interest will be either the
             specified tensor or the evaluation of the given Qoi object on 
             `model`.
+        D : str or Doi
+            distribution of interest
         multiply_activation : bool
             If `multiply_activation` is True (default), the attribution of each
             unit will be the influence of the unit times the activation of the
             unit. Otherwise, the attribution of each unit will be simply the 
             influence of the unit.
         '''
+        super(InternalInfluence, self).__init__(self, model, layer)
         self.agg_fn = agg_fn
         self.multiply_activation = multiply_activation
 
@@ -73,6 +80,26 @@ class InternalInfluence(AttributionMethod):
 
         else:
             self.Q = Q
+
+        if isinstance(D, str):
+            if D == 'point':
+                self.D = Doi.point()
+
+            elif D == 'linear_interp':
+                self.D = Doi.linear_interp(self.layer.output_shape)
+
+            else:
+                raise ValueError(
+                    "String argument `distribution` must be either "
+                    "'linear_interp' or 'point'.")
+
+        elif isinstance(D, Doi):
+            self.D = D
+
+        else:
+            raise ValueError(
+                'Argument `distribution` must be either a Doi object or a '
+                'string.')
 
         # Tensorflow wraps the gradients in an array, while theano doesn't.
         if K.backend() == 'theano':
@@ -167,6 +194,136 @@ class InternalInfluence(AttributionMethod):
         self.n_outs = n_outs
             
         return self
+
+    def __get_sym_attributions(self):
+
+        # Get the distribution as a tensor.
+        distribution = (self.D(self.layer.output)
+            .reshape('flat distribution shape'))
+
+        distribution = Input()
+
+        # Take gradient
+        inner_grad = self.post_grad(K.gradients(
+            self.Q.sum(), 
+            distribution))
+
+        grad_over_distribution = (inner_grad
+            .reshape('distribution shape')
+            .mean(axis=1))
+
+        # Flatten or aggregate.
+
+        layer_outs = self.layer.output
+
+        # Get the distribution.
+        distribution = self.D(layer_outs)
+
+
+        # Case for flat intermediate layers.
+        if K.ndim(self.layer.output) == 2:
+            n_outs = K.int_shape(layer_outs)[1]
+
+        # Case for convolutional intermediate layers.
+        elif K.ndim(self.layer.output) == 4:
+            if self.agg_fn is None:
+                # Flatten the output.
+                layer_outs = K.batch_flatten(layer_outs)
+                n_outs = K.int_shape(layer_outs)[1]
+
+            else:
+                # If the aggregation function is given, treat each feature map
+                # as a unit of attribution.
+                if K.image_data_format() == 'channels_first':
+                    n_outs = K.int_shape(layer_outs)[1]
+                else:
+                    n_outs = K.int_shape(layer_outs)[3]
+
+        post_fn = lambda r: r.transpose((1,0))
+
+        # Get outputs for flat intermediate layers.
+        if K.ndim(self.layer.output) == 2:
+            n_outs = K.int_shape(self.layer.output)[1]
+            layer_grads = [inner_grad[:,i] for i in range(n_outs)]
+            layer_outs = [self.layer.output[:,i] for i in range(n_outs)]
+
+            self.attribution_units = layer_outs
+            self.p_fn = lambda x: x
+                        
+        # Get outputs for convolutional intermediate layers.
+        elif K.ndim(self.layer.output) == 4:
+            if self.agg_fn is None:
+                n_outs = int(np.prod(K.int_shape(self.layer.output)[1:]))
+                layer_outs = K.batch_flatten(self.layer.output)
+                layer_grads = [inner_grad]
+                post_fn = lambda r: r[0]
+
+                self.attribution_units = K.transpose(layer_outs)
+                self.p_fn = lambda x: x
+            else:
+                # If the aggregation function is given, treat each feature map
+                # as a unit of attribution.
+                if K.image_data_format() == 'channels_first':
+                    n_outs = K.int_shape(self.layer.output)[1]
+                    sel_fn = lambda g, i: self.agg_fn(g[:,i,:,:], axis=(1,2))
+                    p_fn = K.function(
+                        [self.layer.output], 
+                        [self.agg_fn(self.layer.output, axis=(2,3))])
+
+                    self.p_fn = lambda x: p_fn([x])[0]
+                else:
+                    n_outs = K.int_shape(self.layer.output)[3]
+                    sel_fn = lambda g, i: self.agg_fn(g[:,:,:,i], axis=(1,2))
+                    p_fn = K.function(
+                        [self.layer.output], 
+                        [self.agg_fn(self.layer.output, axis=(1,2))])
+
+                    self.p_fn = lambda x: p_fn([x])[0]
+
+                layer_grads = [sel_fn(inner_grad, i) for i in range(n_outs)]
+                layer_outs = [
+                    sel_fn(self.layer.output, i) 
+                    for i in range(n_outs)]
+
+                self.attribution_units = layer_outs
+
+        else:
+            raise ValueError(
+                'Unsupported tensor shape: ndim={}'
+                .format(K.ndim(self.layer.output)))
+
+        # If we used an internal layer, we need to be able to compute the
+        # activations of the network at the layer.
+        if self.layer != self.model.layers[0]:
+            feats_f = K.function([self.model.input], [self.layer.output])
+            self.get_features = lambda x: np.array(feats_f([x]))[0]
+
+        else:
+            self.get_features = lambda x: x
+
+        # If the model uses a learning phase (e.g., for dropout), we need to
+        # make sure we evaluate the gradients in 'test' mode.
+        if self.model.uses_learning_phase:
+            grad_f = K.function(
+                [self.layer.output, K.learning_phase()], 
+                layer_grads)
+            self.dQdz = lambda inp: post_fn(np.array(grad_f([inp, 0])))
+
+        else:
+            grad_f = K.function([self.layer.output], layer_grads)
+            self.dQdz = lambda inp: post_fn(np.array(grad_f([inp])))
+
+        self.is_compiled = True
+        self.n_outs = n_outs
+            
+        return self
+
+    def get_sym_attributions(self,
+            distribution='linear_interp',
+            baseline=None,
+            resolution=10,
+            match_layer_shape=False):
+        pass
 
     def get_attributions(self, 
             x, 

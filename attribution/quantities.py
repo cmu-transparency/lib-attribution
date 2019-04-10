@@ -7,7 +7,7 @@ class Qoi(object):
     Interface for a quantity of interest.
     '''
 
-    def __call__(self, model):
+    def __call__(self, top_of_model):
         '''
         '''
         raise NotImplementedError('This is an abstract method.')
@@ -32,7 +32,7 @@ class ClassQoi(Qoi):
         self.c = c
 
     def __call__(self, model):
-        return model.output[:,self.c]
+        return model.output[:, self.c]
 
 
 class ComparativeQoi(Qoi):
