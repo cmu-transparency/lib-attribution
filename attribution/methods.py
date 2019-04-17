@@ -58,7 +58,7 @@ class InternalInfluence(AttributionMethod):
             unit. Otherwise, the attribution of each unit will be simply the 
             influence of the unit.
         '''
-        super(InternalInfluence, self).__init__(self, model, layer)
+        super(InternalInfluence, self).__init__(model, layer)
         self.agg_fn = agg_fn
         self.multiply_activation = multiply_activation
 
@@ -73,7 +73,7 @@ class InternalInfluence(AttributionMethod):
 
         elif isinstance(Q, int):
             # Treat this as the class we would like to get the logit outputs of.
-            self.Q = Qoi.for_class(c)
+            self.Q = Qoi.for_class(Q)(model)
 
         elif isinstance(Q, Qoi):
             self.Q = Q(model)
@@ -409,7 +409,7 @@ class InternalInfluence(AttributionMethod):
         instance = self.get_features(x)
 
         if baseline is None:
-            baseline = self.get_features(np.zeros_like(instance))
+            baseline = np.zeros_like(instance)
 
         elif baseline.shape != instance.shape:
             raise ValueError('Shape of `baseline` must match internal layer.')
