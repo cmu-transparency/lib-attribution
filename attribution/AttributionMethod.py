@@ -30,6 +30,7 @@ class AttributionMethod(object):
             raise ValueError('Need to pass layer index, name, or instance.')
 
         self.is_compiled = False
+        self.symbolic_attributions = None
 
   
     def compile(self, **kwargs):
@@ -52,8 +53,13 @@ class AttributionMethod(object):
         '''
         raise NotImplementedError('This is an abstract method.')
 
-    def get_sym_attributions(self, x, **kwargs):
+    def _get_sym_attributions(self):
+        raise NotImplementedError('This is an abstract method.')
+
+    def get_sym_attributions(self):
         '''
         TODO: docstring.
         '''
-        raise NotImplementedError('This is an abstract method.')
+        return (
+            self.symbolic_attributions if self.symbolic_attributions else 
+            self._get_sym_attributions())

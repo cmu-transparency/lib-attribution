@@ -12,6 +12,7 @@ from keras.layers import Input
 from .AttributionMethod import AttributionMethod
 
 from .distributions import Doi
+from .model_utils import top_slice
 from .quantities import Qoi
 
 
@@ -42,16 +43,21 @@ class InternalInfluence(AttributionMethod):
             aggregation will be performed, so the attributions of each unit in
             each feature map will be returned. This parameter is not relevant
             if `layer` represents a fully-connected layer.
-        Q : int or Qoi or K.Tensor, optional
+        Q : int or Qoi, optional
             The quantity of interest. If `Q` is None, the quantity of interest
             will default to the maximum of the model's logit output, i.e., the
             logit output for the predicted class. If `Q` is an int, the quantity
             of interest will be the logit output for the class specified by the
-            given integer. Otherwise the quantity of interest will be either the
-            specified tensor or the evaluation of the given Qoi object on 
-            `model`.
+            given integer. Otherwise the quantity of interest will be the 
+            evaluation of the given Qoi object on the top slice of `model`.
         D : str or Doi
-            distribution of interest
+            The distribution of interest to use when calculating the attribution
+            of each point in `x`. If `distribution` is a string, it must be
+            either `'linear_interp'` or `'point'`. Using `'linear_interp'`
+            specifies that the distribution is the linear interpolation between
+            the instance and a given *baseline* (this recovers the Aumann-
+            Shapley value). Using `'point'` specifies that only the points
+            themselves should be included in the distribution of interest.
         multiply_activation : bool
             If `multiply_activation` is True (default), the attribution of each
             unit will be the influence of the unit times the activation of the
@@ -62,6 +68,29 @@ class InternalInfluence(AttributionMethod):
         self.agg_fn = agg_fn
         self.multiply_activation = multiply_activation
 
+        # Get the distribution of interest.
+        if isinstance(D, str):
+            if D == 'point':
+                self.z = Doi.point()(self.layer.output)
+
+            elif D == 'linear_interp':
+                self.z = Doi.linear_interp()(self.layer.output)
+
+            else:
+                raise ValueError(
+                    "String argument `D` must be either 'linear_interp' or "
+                    "'point'.")
+
+        elif isinstance(D, Doi):
+            self.z = D(self.layer.output)
+
+        else:
+            raise ValueError(
+                'Argument `D` must be either a Doi object or a string.')
+
+        # Get the top of the model.
+        self.g = top_slice(model, self.layer, input_tensor=self.z)
+
         if Q is None:
             # Get the maximum of the logits; this is the logit value for the 
             # predicted class.
@@ -69,37 +98,18 @@ class InternalInfluence(AttributionMethod):
             # TODO: this needs to be the logit output.
             # TODO: does max give us the same thing as dotting with the one-hot
             #   argmaxes?
-            self.Q = model.output.max(axis=1)
+            self.Q = self.g.output.max(axis=1)
 
         elif isinstance(Q, int):
             # Treat this as the class we would like to get the logit outputs of.
-            self.Q = Qoi.for_class(Q)(model)
+            self.Q = Qoi.for_class(Q)(self.g)
 
         elif isinstance(Q, Qoi):
-            self.Q = Q(model)
-
-        else:
-            self.Q = Q
-
-        if isinstance(D, str):
-            if D == 'point':
-                self.D = Doi.point()
-
-            elif D == 'linear_interp':
-                self.D = Doi.linear_interp(self.layer.output_shape)
-
-            else:
-                raise ValueError(
-                    "String argument `distribution` must be either "
-                    "'linear_interp' or 'point'.")
-
-        elif isinstance(D, Doi):
-            self.D = D
+            self.Q = Q(self.g)
 
         else:
             raise ValueError(
-                'Argument `distribution` must be either a Doi object or a '
-                'string.')
+                'Argument `Q` must be either a Qoi object, an int or None.')
 
         # Tensorflow wraps the gradients in an array, while theano doesn't.
         if K.backend() == 'theano':
@@ -111,7 +121,12 @@ class InternalInfluence(AttributionMethod):
         else:
             raise ValueError('Unsupported backend: {}'.format(K.backend()))
 
-    def compile(self):
+        # Make a placeholder for maintaining the input shape.
+        self.match_layer_shape = K.placeholder(ndim=0, dtype='bool')
+
+
+    # TODO: retire this once new compile is tested.
+    def compile_old(self):
         inner_grad = self.post_grad(K.gradients(
             self.Q.sum(), 
             self.layer.output))
@@ -195,142 +210,109 @@ class InternalInfluence(AttributionMethod):
             
         return self
 
-    def __get_sym_attributions(self):
+    def _get_sym_attributions(self):
 
-        # Get the distribution as a tensor.
-        distribution = (self.D(self.layer.output)
-            .reshape('flat distribution shape'))
-
-        distribution = Input()
-
-        # Take gradient
-        inner_grad = self.post_grad(K.gradients(
+        # Take gradient.
+        grad = self.post_grad(K.gradients(
             self.Q.sum(), 
-            distribution))
+            self.z))
 
-        grad_over_distribution = (inner_grad
-            .reshape('distribution shape')
+        # Aggregate the gradient over the distribution of interest.
+        N = self.model.input.shape[0]
+        D = K.int_shape(self.z)[1:]
+
+        grad_over_doi = (grad
+            .reshape((N, -1) + D)
             .mean(axis=1))
+
+        # Multiply by the activation if specified.
+        if self.multiply_activation:
+            if 'baseline' in self.z._doi_params:
+                print('using baseline')
+                attribution = grad_over_doi * (
+                    self.z._doi_parent - 
+                    K.expand_dims(self.z._doi_params['baseline'], axis=0))
+            else:
+                attribution = grad_over_doi * self.z._doi_parent
+
+        else:
+            attribution = grad_over_doi
 
         # Flatten or aggregate.
 
-        layer_outs = self.layer.output
-
-        # Get the distribution.
-        distribution = self.D(layer_outs)
-
-
         # Case for flat intermediate layers.
-        if K.ndim(self.layer.output) == 2:
-            n_outs = K.int_shape(layer_outs)[1]
+        if K.ndim(attribution) == 2:
+            # Output is already flat and doesn't need to be aggregated.
+            pass
 
         # Case for convolutional intermediate layers.
-        elif K.ndim(self.layer.output) == 4:
+        elif K.ndim(attribution) == 4:
             if self.agg_fn is None:
-                # Flatten the output.
-                layer_outs = K.batch_flatten(layer_outs)
-                n_outs = K.int_shape(layer_outs)[1]
+                # Flatten the output unless we specified to maintain the layer
+                # shape.
+                attribution = K.switch(
+                    self.match_layer_shape,
+                    attribution,
+                    K.batch_flatten(attribution))
 
             else:
                 # If the aggregation function is given, treat each feature map
                 # as a unit of attribution.
                 if K.image_data_format() == 'channels_first':
-                    n_outs = K.int_shape(layer_outs)[1]
+                    attribution = self.agg_fn(attribution, axis=(2,3))
                 else:
-                    n_outs = K.int_shape(layer_outs)[3]
-
-        post_fn = lambda r: r.transpose((1,0))
-
-        # Get outputs for flat intermediate layers.
-        if K.ndim(self.layer.output) == 2:
-            n_outs = K.int_shape(self.layer.output)[1]
-            layer_grads = [inner_grad[:,i] for i in range(n_outs)]
-            layer_outs = [self.layer.output[:,i] for i in range(n_outs)]
-
-            self.attribution_units = layer_outs
-            self.p_fn = lambda x: x
-                        
-        # Get outputs for convolutional intermediate layers.
-        elif K.ndim(self.layer.output) == 4:
-            if self.agg_fn is None:
-                n_outs = int(np.prod(K.int_shape(self.layer.output)[1:]))
-                layer_outs = K.batch_flatten(self.layer.output)
-                layer_grads = [inner_grad]
-                post_fn = lambda r: r[0]
-
-                self.attribution_units = K.transpose(layer_outs)
-                self.p_fn = lambda x: x
-            else:
-                # If the aggregation function is given, treat each feature map
-                # as a unit of attribution.
-                if K.image_data_format() == 'channels_first':
-                    n_outs = K.int_shape(self.layer.output)[1]
-                    sel_fn = lambda g, i: self.agg_fn(g[:,i,:,:], axis=(1,2))
-                    p_fn = K.function(
-                        [self.layer.output], 
-                        [self.agg_fn(self.layer.output, axis=(2,3))])
-
-                    self.p_fn = lambda x: p_fn([x])[0]
-                else:
-                    n_outs = K.int_shape(self.layer.output)[3]
-                    sel_fn = lambda g, i: self.agg_fn(g[:,:,:,i], axis=(1,2))
-                    p_fn = K.function(
-                        [self.layer.output], 
-                        [self.agg_fn(self.layer.output, axis=(1,2))])
-
-                    self.p_fn = lambda x: p_fn([x])[0]
-
-                layer_grads = [sel_fn(inner_grad, i) for i in range(n_outs)]
-                layer_outs = [
-                    sel_fn(self.layer.output, i) 
-                    for i in range(n_outs)]
-
-                self.attribution_units = layer_outs
+                    attribution = self.agg_fn(attribution, axis=(1,2))
 
         else:
             raise ValueError(
                 'Unsupported tensor shape: ndim={}'
                 .format(K.ndim(self.layer.output)))
 
-        # If we used an internal layer, we need to be able to compute the
-        # activations of the network at the layer.
-        if self.layer != self.model.layers[0]:
-            feats_f = K.function([self.model.input], [self.layer.output])
-            self.get_features = lambda x: np.array(feats_f([x]))[0]
+        self.symbolic_attributions = attribution
 
-        else:
-            self.get_features = lambda x: x
+        return attribution
+
+    def compile(self):
+        x = (
+            self.model.input if isinstance(self.model.input, list) else 
+            [self.model.input])
+
+        doi_params = [self.z._doi_params[k] for k in self.z._doi_params]
 
         # If the model uses a learning phase (e.g., for dropout), we need to
         # make sure we evaluate the gradients in 'test' mode.
-        if self.model.uses_learning_phase:
-            grad_f = K.function(
-                [self.layer.output, K.learning_phase()], 
-                layer_grads)
-            self.dQdz = lambda inp: post_fn(np.array(grad_f([inp, 0])))
+        learning_phase = (
+            [K.learning_phase()] if 
+                hasattr(self.model, 'uses_learning_phase') and 
+                self.model.uses_learning_phase and 
+                K.backend() == 'theano' else
+            [])
 
-        else:
-            grad_f = K.function([self.layer.output], layer_grads)
-            self.dQdz = lambda inp: post_fn(np.array(grad_f([inp])))
+        attributions = self.get_sym_attributions()
 
+        attribution_k_fn = K.function(
+            x + learning_phase + [self.match_layer_shape] + doi_params, 
+            [attributions])
+
+        def attribution_fn(x, match_layer_shape, **doiparams):
+            x = x if isinstance(x, list) else [x]
+            lp = [0] if learning_phase else []
+            doiparams = [doiparams[k] for k in doiparams]
+
+            return attribution_k_fn(
+                x + lp + [match_layer_shape] + doiparams)[0]
+
+        self.attribution_fn = attribution_fn
         self.is_compiled = True
-        self.n_outs = n_outs
-            
+        
         return self
 
-    def get_sym_attributions(self,
-            distribution='linear_interp',
-            baseline=None,
-            resolution=10,
-            match_layer_shape=False):
-        pass
-
     def get_attributions(self, 
-            x, 
-            distribution='linear_interp',
+            x,
             baseline=None, 
             resolution=10, 
-            match_layer_shape=False):
+            match_layer_shape=False,
+            **doi_params):
         '''
         Parameters
         ----------
@@ -339,14 +321,6 @@ class InternalInfluence(AttributionMethod):
             attributions for. If a single instance has shape D, a batch of
             instances should have shape N x D, where N is the number of 
             instances.
-        distribution : str or Doi
-            The distribution of interest to use when calculating the attribution
-            of each point in `x`. If `distribution` is a string, it must be
-            either `'linear_interp'` or `'point'`. Using `'linear_interp'`
-            specifies that the distribution is the linear interpolation between
-            the instance and a given *baseline* (this recovers the Aumann-
-            Shapley value). Using `'point'` specifies that only the points
-            themselves should be included in the distribution of interest.
         baseline : np.Array, optional
             If the distribution of interest is given as `'linear_interp'`, 
             `baseline` specifies the baseline for the linear interpolation. When
@@ -367,6 +341,8 @@ class InternalInfluence(AttributionMethod):
             layer, or if `self.agg_fn` is not None, the array of attributions 
             will match the layer shape regardless, so this parameter is 
             irrelevant.
+        **doi_params : optional
+            Parameters to be passed into the distribution of interest.
 
         Returns
         -------
@@ -382,38 +358,39 @@ class InternalInfluence(AttributionMethod):
 
         assert self.is_compiled, 'Must compile before measuring attribution.'
 
-        if isinstance(distribution, str):
-            # We can capture a point distribution by setting the resolution to
-            # one.
-            if distribution == 'point':
-                resolution = 1
-
-            elif distribution != 'linear_interp':
-                raise ValueError(
-                    "String argument `distribution` must be either "
-                    "'linear_interp' or 'point'.")
-
-        # TODO: include Doi class.
-        else:
-            raise ValueError(
-                'Argument `distribution` must be either a Doi object or a '
-                'string.')
-
         # Figure out if we were passed an instance or a batch of instances.
+        # TODO: this is not supporting models with multiple inputs.
         if len(x.shape) == len(self.model.input_shape):
             used_batch = True
         else:
             used_batch = False
             x = np.expand_dims(x, axis=0)
 
-        instance = self.get_features(x)
-
         if baseline is None:
-            baseline = np.zeros_like(instance)
+            baseline = np.zeros(K.int_shape(self.z)[1:])
 
-        elif baseline.shape != instance.shape:
-            raise ValueError('Shape of `baseline` must match internal layer.')
+        elif baseline.shape != K.int_shape(self.z)[1:]:
+            raise ValueError(
+                'Shape of `baseline` must match internal layer.\n'
+                '  > shape of `baseline` was {}, but was expected to be {}.'
+                .format(baseline.shape, K.int_shape(self.z)[1:]))
 
+        # Collect the DOI parameters.
+        doi_params['baseline'] = baseline
+        doi_params['resolution'] = resolution
+        try:
+            used_doi_params = {k: doi_params[k] for k in self.z._doi_params}
+        except KeyError as e:
+            raise ValueError(
+                '`doi_params` must include parameter: {}.'.format(e))
+
+        attributions = self.attribution_fn(
+            x, match_layer_shape, **used_doi_params)
+
+        return attributions if used_batch else attributions[0]
+
+        # TODO: this code is dead but we're keeping it around until we get the
+        #   GPU version to be as fast as the CPU version.
         attributions = np.zeros_like(self.p_fn(instance))
         for a in range(resolution):
             attributions += 1. / resolution * self.dQdz(

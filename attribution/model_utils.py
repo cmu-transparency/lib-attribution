@@ -23,7 +23,8 @@ def replace_softmax_with_logits(model, softmax_layer=-1):
 def top_slice(model, start_layer, input_tensor=None):
     '''
     Given a model, f = g o h, returns g, i.e., the top slice of the model,
-    starting at the given layer.
+    starting after the given layer (starting with the output of the given 
+    layer).
 
     Parameters
     ----------
@@ -31,30 +32,30 @@ def top_slice(model, start_layer, input_tensor=None):
         The model we would like to take the top of. The computation graph of the
         given model is not modified.
     start_layer: keras.layers.Layer or int or str
-        The layer to begin the slice at, given as either an instance of 
+        The layer to begin the slice after, given as either an instance of 
         keras.layers.Layer, an integer index of a layer in model, or the string
         name of a layer in model. The returned model will have the same input 
-        shape as the given layer. It is assumed that start_layer defines a valid
-        slice, i.e., that start_layer covers the output of the computation graph
-        (all paths from the input to the output of the computation graph contain
-        start_layer).
-    input_tensor : K.Tensor or list of K.Tensor, optional
-        A tensor or list of tensors to be passed as input to g. If input_tensor
-        is None, new placeholders (Input layers) will be created. If provided,
-        there must be one input tensor per input to start_layer.
+        shape as the output shape of the given layer. It is assumed that 
+        `start_layer` defines a valid slice, i.e., that `start_layer` covers the 
+        output of the computation graph (all paths from the input to the output 
+        of the computation graph contain `start_layer`).
+    input_tensor : K.Tensor, optional
+        A tensor to be passed as input to g. If `input_tensor` is None, new 
+        placeholders (Input layers) will be created. If provided, `input_tensor` 
+        must match the shape of the output of `start_layer`.
 
     Returns
     -------
     keras.models.Model
         A keras model representing the top of the given model, beginning at (and
-        including) start_layer.
+        including) `start_layer`.
     '''
-    if isinstance(layer, int):
-        layer = model.layers[layer]
-    elif isinstance(layer, keras.layers.Layer):
-        layer = layer
-    elif isinstance(layer, str):
-        layer = model.get_layer(layer)
+    if isinstance(start_layer, int):
+        start_layer = model.layers[start_layer]
+    elif isinstance(start_layer, keras.layers.Layer):
+        start_layer = start_layer
+    elif isinstance(start_layer, str):
+        start_layer = model.get_layer(start_layer)
     else:
         raise ValueError('Need to pass layer index, name, or instance.')
 
@@ -62,22 +63,16 @@ def top_slice(model, start_layer, input_tensor=None):
     # the computation graph of the original model.
     f = clone_model(model)
 
+    start_layer = f.get_layer(start_layer.name)
+
     # If input_tensor is not specified, we will make new input placeholders for
     # the top slice model.
     if input_tensor is None:
-        if isinstance(start_layer.input_shape, list):
-            # There were multiple input layers; make an input for each.
-            z = [Input(shape[1:]) for shape in start_layer.input_shape]
-        else:
-            z = Input(start_layer.input_shape[1:])
+        z = Input(start_layer.output_shape[1:])
 
-    # OTherwise we use the given tensor (or tensors) as input.
+    # Otherwise we use the given tensor (or tensors) as input.
     else:
-        if isinstance(input_tensor, list):
-            # There were multiple input tensors; make an input for each.
-            z = [Input(tensor=tensor) for tensor in input_tensor]
-        else:
-            z = Input(tensor=input_tensor)
+        z = Input(tensor=input_tensor)
 
     # TODO: should make sure this is general.
     top_layer = f.output._keras_history[0]
@@ -102,13 +97,13 @@ def _get_inbound_layers(l):
 def _model_on_prev_layer(l, l0, new_in):
     if l == l0:
         # Hook this up to our new input.
-        return new_in if isinstance(l0, Input) else l0(new_in)
+        return new_in
 
     # Call recursively.
     inbound_layers = _get_inbound_layers(l)
     if len(inbound_layers) == 1:
-        return l(model_on_prev_layer(inbound_layers[0], l0, new_in))
+        return l(_model_on_prev_layer(inbound_layers[0], l0, new_in))
     else:
         return l([
-            model_on_prev_layer(p, l0, new_in)
+            _model_on_prev_layer(p, l0, new_in)
             for p in get_inbound_layers(l)])
