@@ -1,6 +1,5 @@
 '''
 '''
-print('hi')
 
 class Qoi(object):
     '''

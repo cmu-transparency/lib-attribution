@@ -4,6 +4,7 @@ Docstring for the methods module.
 
 import keras.backend as K
 import numpy as np
+import tensorflow as tf
 
 import keras
 
@@ -98,7 +99,7 @@ class InternalInfluence(AttributionMethod):
             # TODO: this needs to be the logit output.
             # TODO: does max give us the same thing as dotting with the one-hot
             #   argmaxes?
-            self.Q = self.g.output.max(axis=1)
+            self.Q = K.max(self.g.output, axis=1)
 
         elif isinstance(Q, int):
             # Treat this as the class we would like to get the logit outputs of.
@@ -122,7 +123,12 @@ class InternalInfluence(AttributionMethod):
             raise ValueError('Unsupported backend: {}'.format(K.backend()))
 
         # Make a placeholder for maintaining the input shape.
-        self.match_layer_shape = K.placeholder(ndim=0, dtype='bool')
+        self.match_layer_shape = K.placeholder(ndim=0, shape=(), dtype='bool')
+
+        # The following is needed to deal with an apparent bug in Keras' TF backend
+        if K.backend() == 'tensorflow':
+            K.manual_variable_initialization(True)
+            self._tf_sess_initialized = False
 
 
     # TODO: retire this once new compile is tested.
@@ -214,21 +220,18 @@ class InternalInfluence(AttributionMethod):
 
         # Take gradient.
         grad = self.post_grad(K.gradients(
-            self.Q.sum(), 
+            K.sum(self.Q), 
             self.z))
 
         # Aggregate the gradient over the distribution of interest.
-        N = self.model.input.shape[0]
+        N = K.shape(self.model.input)[0]
         D = K.int_shape(self.z)[1:]
 
-        grad_over_doi = (grad
-            .reshape((N, -1) + D)
-            .mean(axis=1))
+        grad_over_doi = K.mean(K.reshape(grad, ((N,-1)+D)), axis=1)
 
         # Multiply by the activation if specified.
         if self.multiply_activation:
             if 'baseline' in self.z._doi_params:
-                print('using baseline')
                 attribution = grad_over_doi * (
                     self.z._doi_parent - 
                     K.expand_dims(self.z._doi_params['baseline'], axis=0))
@@ -273,6 +276,7 @@ class InternalInfluence(AttributionMethod):
         return attribution
 
     def compile(self):
+
         x = (
             self.model.input if isinstance(self.model.input, list) else 
             [self.model.input])
@@ -296,8 +300,14 @@ class InternalInfluence(AttributionMethod):
 
         def attribution_fn(x, match_layer_shape, **doiparams):
             x = x if isinstance(x, list) else [x]
-            lp = [0] if learning_phase else []
+            lp = learning_phase
             doiparams = [doiparams[k] for k in doiparams]
+
+            if K.backend() == 'tensorflow' and not self._tf_sess_initialized:
+                K.get_session().run(
+                    tf.global_variables_initializer(), 
+                    feed_dict={doi_params[p]: doiparams[p] for p in range(len(doi_params))})
+                self._tf_sess_initialized = True
 
             return attribution_k_fn(
                 x + lp + [match_layer_shape] + doiparams)[0]
@@ -377,7 +387,7 @@ class InternalInfluence(AttributionMethod):
 
         # Collect the DOI parameters.
         doi_params['baseline'] = baseline
-        doi_params['resolution'] = resolution
+        doi_params['resolution'] = np.array(resolution, dtype='int32')
         try:
             used_doi_params = {k: doi_params[k] for k in self.z._doi_params}
         except KeyError as e:
