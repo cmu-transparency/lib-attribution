@@ -16,6 +16,22 @@ from .distributions import Doi
 from .model_utils import top_slice
 from .quantities import Qoi
 
+# This function is needed because the Keras backend
+# does not provide placeholder values when it initializes 
+# session variables.
+# I haven't been able to find any other reports of this issue,
+# so there must be a better workaround, but this routine seems
+# to suffice at the moment.
+def init_tensorflow_session():
+    if K.backend() == 'tensorflow':
+        graph = K.get_session().graph
+        placeholders = [op.values()[0] for op in graph.get_operations() 
+                            if op.type == "Placeholder" 
+                            and not(None in K.int_shape(op.values()[0]))]
+        inits = [np.ones(K.int_shape(p), dtype=K.dtype(p)) for p in placeholders]
+        K.get_session().run(
+            tf.global_variables_initializer(), 
+            feed_dict={placeholders[p]: inits[p] for p in range(len(placeholders))})
 
 class InternalInfluence(AttributionMethod):
     '''
@@ -126,9 +142,8 @@ class InternalInfluence(AttributionMethod):
         self.match_layer_shape = K.placeholder(ndim=0, shape=(), dtype='bool')
 
         # The following is needed to deal with an apparent bug in Keras' TF backend
-        if K.backend() == 'tensorflow':
-            K.manual_variable_initialization(True)
-            self._tf_sess_initialized = False
+        # if K.backend() == 'tensorflow':
+        #     K.manual_variable_initialization(True)
 
 
     # TODO: retire this once new compile is tested.
@@ -298,16 +313,15 @@ class InternalInfluence(AttributionMethod):
             x + learning_phase + [self.match_layer_shape] + doi_params, 
             [attributions])
 
+        if K.backend() == 'tensorflow':
+            K.manual_variable_initialization(True)
+            init_tensorflow_session()
+            K.manual_variable_initialization(False)
+
         def attribution_fn(x, match_layer_shape, **doiparams):
             x = x if isinstance(x, list) else [x]
             lp = learning_phase
             doiparams = [doiparams[k] for k in doiparams]
-
-            if K.backend() == 'tensorflow' and not self._tf_sess_initialized:
-                K.get_session().run(
-                    tf.global_variables_initializer(), 
-                    feed_dict={doi_params[p]: doiparams[p] for p in range(len(doi_params))})
-                self._tf_sess_initialized = True
 
             return attribution_k_fn(
                 x + lp + [match_layer_shape] + doiparams)[0]
