@@ -6,11 +6,12 @@ import copy
 
 class Literal(object):
 
-    def __init__(self, layer, unit, value, attribution_unit=None):
+    def __init__(self, layer, unit, op, value, attribution_unit=None):
         self.layer = layer
         self.unit = unit
         self.value = value
         self.attribution_unit = attribution_unit
+        self.op = op
 
     def get_tensor(self, attribution_unit=None):
         u_t = attribution_unit if attribution_unit is not None else self.attribution_unit
@@ -18,8 +19,8 @@ class Literal(object):
 
         zeros = K.zeros_like(u_t)
         ones = K.ones_like(u_t)
-        eq_fn = K.not_equal if self.value == 1 else K.equal
-        u_bt = K.expand_dims(K.switch(eq_fn(u_t, zeros), ones, zeros), 1)
+        vals = zeros + self.value
+        u_bt = K.expand_dims(K.switch(self.op(u_t, vals), ones, zeros), 1)
 
         return u_bt
 
@@ -27,7 +28,21 @@ class Literal(object):
         return copy.copy(self)
 
     def __str__(self):
-        return "{}[{}] = {}".format(self.layer.name, self.unit, self.value)
+        op = '?'
+        if self.op == K.equal:
+            op = '='
+        if self.op == K.not_equal:
+            op = '!='
+        if self.op == K.less:
+            op = '<'
+        if self.op == K.less_equal:
+            op = '<='
+        if self.op == K.greater:
+            op = '>'
+        if self.op == K.greater_equal:
+            op = '>='
+
+        return "{}[{}] {} {}".format(self.layer.name, self.unit, op, self.value)
 
 class Clause(object):
     '''

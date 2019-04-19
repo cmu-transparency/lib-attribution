@@ -10,10 +10,11 @@ from .invariant import Literal, Clause, Invariant
 
 class ActivationInvariants(object):
 
-    def __init__(self, model, layers=None, agg_fn=K.max, Q=None):
+    def __init__(self, model, layers=None, agg_fn=K.max, Q=None, binary_feats=True):
         self.model = model
         self.agg_fn = agg_fn
         self.layers = layers
+        self.binary_feats = binary_feats
         if layers is None:
             self.layers = [model.layers[i] for i in range(1, len(self.model.layers)-1)]
         elif isinstance(layers[0], int):
@@ -30,9 +31,14 @@ class ActivationInvariants(object):
         if np.ndim(x) == K.ndim(self.model.input) - 1:
             x = np.expand_dims(x, axis=0)
 
-        acts = np.concatenate(
-                [np.where(self._attributers[i].get_attributions(x) != 0., 1, 0).reshape(len(x), -1)
-                    for i in range(len(self._attributers))], axis=1)
+        if self.binary_feats:
+            acts = np.concatenate(
+                    [np.where(self._attributers[i].get_attributions(x) != 0., 1, 0).reshape(len(x), -1)
+                        for i in range(len(self._attributers))], axis=1)
+        else:
+            acts = np.concatenate(
+                    [self._attributers[i].get_attributions(x).reshape(len(x),-1)
+                        for i in range(len(self._attributers))], axis=1)
 
         qs = self.QF(x)
 
@@ -85,8 +91,13 @@ class ActivationInvariants(object):
             if(clf.tree_.children_left[node] != clf.tree_.children_right[node]):
                 layer, _, unit = map_feat_to_layer(clf.tree_.feature[node])
                 au = self._attributers[layer].attribution_units[unit]
-                lit_f = Literal(self.layers[layer], unit, 0, attribution_unit=au)
-                lit_t = Literal(self.layers[layer], unit, 1, attribution_unit=au)
+                if self.binary_feats:
+                    lit_f = Literal(self.layers[layer], unit, K.equal, 0, attribution_unit=au)
+                    lit_t = Literal(self.layers[layer], unit, K.not_equal, 0, attribution_unit=au)
+                else:
+                    thresh = clf.tree_.threshold[node]
+                    lit_f = Literal(self.layers[layer], unit, K.less_equal, thresh, attribution_unit=au)
+                    lit_t = Literal(self.layers[layer], unit, K.greater, thresh, attribution_unit=au)
                 stack.append((clf.tree_.children_left[node], 
                                 clause.add_literal(lit_f, copy_self=True)))
                 stack.append((clf.tree_.children_right[node], 

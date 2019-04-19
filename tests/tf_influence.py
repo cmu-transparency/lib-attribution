@@ -1,5 +1,4 @@
 import os
-os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"
 os.environ["KERAS_BACKEND"]="tensorflow"
 
 import numpy as np

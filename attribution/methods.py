@@ -141,10 +141,6 @@ class InternalInfluence(AttributionMethod):
         # Make a placeholder for maintaining the input shape.
         self.match_layer_shape = K.placeholder(ndim=0, shape=(), dtype='bool')
 
-        # The following is needed to deal with an apparent bug in Keras' TF backend
-        # if K.backend() == 'tensorflow':
-        #     K.manual_variable_initialization(True)
-
 
     # TODO: retire this once new compile is tested.
     def compile_old(self):
@@ -308,10 +304,8 @@ class InternalInfluence(AttributionMethod):
             [])
 
         attributions = self.get_sym_attributions()
-
-        attribution_k_fn = K.function(
-            x + learning_phase + [self.match_layer_shape] + doi_params, 
-            [attributions])
+        self.attribution_params = x + learning_phase + [self.match_layer_shape] + doi_params
+        attribution_k_fn = K.function(self.attribution_params, [attributions])
 
         if K.backend() == 'tensorflow':
             K.manual_variable_initialization(True)
@@ -320,7 +314,7 @@ class InternalInfluence(AttributionMethod):
 
         def attribution_fn(x, match_layer_shape, **doiparams):
             x = x if isinstance(x, list) else [x]
-            lp = learning_phase
+            lp = [0] if learning_phase else []
             doiparams = [doiparams[k] for k in doiparams]
 
             return attribution_k_fn(

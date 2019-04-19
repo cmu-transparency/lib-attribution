@@ -2,7 +2,7 @@ import os
 os.environ["KERAS_BACKEND"]="theano"
 
 import numpy as np
-from influence_tests import *
+from invariant_tests import *
 
 if __name__ == "__main__":
 	np.random.seed(0)
