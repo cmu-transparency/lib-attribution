@@ -41,9 +41,6 @@ def basic_binary_activation_quantity():
 	x1[0,5:] = 0
 	X = np.tile(np.concatenate((x0,x1), axis=0), (100,1))
 
-	print(m.predict(x0))
-	print(m.predict(x1))
-
 	x0_l = m.predict(x0).argmax(axis=1)
 	x1_l = m.predict(x1).argmax(axis=1)
 	
@@ -281,7 +278,6 @@ def basic_threshold_activation_evals():
 	inv0_eval_good = False
 	inv1_eval_good = False
 	for inv in invs:
-		print(inv)
 		if inv.Q == 0:
 			inv0_eval_good = inv.eval(x0)[0]
 		if inv.Q == 1:
