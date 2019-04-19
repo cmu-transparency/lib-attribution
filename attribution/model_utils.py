@@ -2,10 +2,16 @@ import os
 import tempfile
 
 from keras.layers import Input
-from keras.models import Model, clone_model
+from keras.models import Model
+from keras.models import clone_model as _clone_model
 
 import keras
 
+
+def clone_model(model):
+    m2 = _clone_model(model)
+    m2.set_weights(model.get_weights())
+    return m2
 
 def replace_softmax_with_logits(model, softmax_layer=-1):
     model_p = keras.models.clone_model(model)
@@ -18,7 +24,6 @@ def replace_softmax_with_logits(model, softmax_layer=-1):
         return keras.models.load_model(tmp_path)
     finally:
         os.remove(tmp_path)
-
 
 def top_slice(model, start_layer, input_tensor=None):
     '''

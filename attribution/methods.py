@@ -16,22 +16,25 @@ from .distributions import Doi
 from .model_utils import top_slice
 from .quantities import Qoi
 
-# This function is needed because the Keras backend
-# does not provide placeholder values when it initializes 
-# session variables.
-# I haven't been able to find any other reports of this issue,
-# so there must be a better workaround, but this routine seems
-# to suffice at the moment.
+
+# NOTE(mfredrik): This function is needed because the Keras backend does not 
+#   provide placeholder values when it initializes session variables. I haven't 
+#   been able to find any other reports of this issue, so there must be a better 
+#   workaround, but this routine seems to suffice at the moment.
 def init_tensorflow_session():
     if K.backend() == 'tensorflow':
         graph = K.get_session().graph
-        placeholders = [op.values()[0] for op in graph.get_operations() 
-                            if op.type == "Placeholder" 
-                            and not(None in K.int_shape(op.values()[0]))]
-        inits = [np.ones(K.int_shape(p), dtype=K.dtype(p)) for p in placeholders]
+        placeholders = [
+            op.values()[0] 
+            for op in graph.get_operations() 
+            if op.type == "Placeholder" and 
+                not (None in K.int_shape(op.values()[0]))]
+        inits = [
+            np.ones(K.int_shape(p), dtype=K.dtype(p)) for p in placeholders]
         K.get_session().run(
             tf.global_variables_initializer(), 
-            feed_dict={placeholders[p]: inits[p] for p in range(len(placeholders))})
+            feed_dict={
+                placeholders[p]: inits[p] for p in range(len(placeholders))})
 
 class InternalInfluence(AttributionMethod):
     '''
