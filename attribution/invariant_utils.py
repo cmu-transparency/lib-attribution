@@ -10,11 +10,11 @@ def merge_by_Q(I, model=None):
     if model is None:
         model = I[0].model
 
-    Qs = sorted(list(set([inv.Q for inv in invs])))
+    Qs = sorted(list(set([inv.Q for inv in I])))
 
     Ir = []
     for q in Qs:
-        Is = list(filter(lambda inv: inv.Q == q, invs))
+        Is = list(filter(lambda inv: inv.Q == q, I))
         clauses = [clause for inv in Is for clause in inv.clauses]
         supp = [inv.support for inv in Is]
         supp_tot = sum(supp)
