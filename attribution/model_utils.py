@@ -25,7 +25,7 @@ def replace_softmax_with_logits(model, softmax_layer=-1):
     finally:
         os.remove(tmp_path)
 
-def top_slice(model, start_layer, input_tensor=None):
+def top_slice(model, start_layer, input_tensor=None, clone=True):
     '''
     Given a model, f = g o h, returns g, i.e., the top slice of the model,
     starting after the given layer (starting with the output of the given 
@@ -35,7 +35,7 @@ def top_slice(model, start_layer, input_tensor=None):
     ----------
     model : keras.models.Model
         The model we would like to take the top of. The computation graph of the
-        given model is not modified.
+        given model is not modified unless `clone` is set to False.
     start_layer: keras.layers.Layer or int or str
         The layer to begin the slice after, given as either an instance of 
         keras.layers.Layer, an integer index of a layer in model, or the string
@@ -48,6 +48,10 @@ def top_slice(model, start_layer, input_tensor=None):
         A tensor to be passed as input to g. If `input_tensor` is None, new 
         placeholders (Input layers) will be created. If provided, `input_tensor` 
         must match the shape of the output of `start_layer`.
+    clone : boolean
+        If set to True, the computation graph of `model` will not be modified,
+        and the returned model will not be connected to the original model.
+
 
     Returns
     -------
@@ -64,11 +68,11 @@ def top_slice(model, start_layer, input_tensor=None):
     else:
         raise ValueError('Need to pass layer index, name, or instance.')
 
-    # First, make a new copy of the model so it can be modified without changing
-    # the computation graph of the original model.
-    f = clone_model(model)
-
-    start_layer = f.get_layer(start_layer.name)
+    # First, if specified, make a new copy of the model so it can be modified 
+    # without changing the computation graph of the original model.
+    if clone:
+        f = clone_model(model)
+        start_layer = f.get_layer(start_layer.name)
 
     # If input_tensor is not specified, we will make new input placeholders for
     # the top slice model.
@@ -79,7 +83,7 @@ def top_slice(model, start_layer, input_tensor=None):
     else:
         z = Input(tensor=input_tensor)
 
-    # TODO: should make sure this is general.
+    # TODO(kleino): should make sure this is general.
     top_layer = f.output._keras_history[0]
 
     return Model(z, _model_on_prev_layer(top_layer, start_layer, z))
@@ -90,7 +94,7 @@ def _get_inbound_layers(l):
     Given a keras layer, l, returns a list of the inbound layers to l, i.e., the
     layers preceding l in the network.
 
-    TODO: make sure this works on both backends.
+    TODO(kleino): make sure this works on both backends.
     '''
     inbound_layers = []
     for i_node in l._inbound_nodes:

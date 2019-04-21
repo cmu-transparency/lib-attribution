@@ -89,6 +89,11 @@ class InternalInfluence(AttributionMethod):
         '''
         super(InternalInfluence, self).__init__(model, layer)
 
+        # Make a clone of the model so the computation graph can be modified
+        # without affecting the original model.
+        self.model = clone_model(model)
+        self.layer = self.model.get_layer(self.layer.name)
+
         self.agg_fn = agg_fn
         self.multiply_activation = multiply_activation
 
@@ -113,7 +118,8 @@ class InternalInfluence(AttributionMethod):
                 'Argument `D` must be either a Doi object or a string.')
 
         # Get the top of the model.
-        self.g = top_slice(model, self.layer, input_tensor=self.z)
+        self.g = top_slice(
+            self.model, self.layer, input_tensor=self.z, clone=False)
 
         if Q is None:
             # Get the maximum of the logits; this is the logit value for the 
