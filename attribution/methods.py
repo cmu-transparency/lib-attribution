@@ -614,38 +614,53 @@ class Activation(AttributionMethod):
 
     def compile(self):
 
-        # Get outputs for flat intermediate layers
+        # Get outputs for flat intermediate layers.
         if K.ndim(self.layer.output) == 2:
             n_outs = K.int_shape(self.layer.output)[1]
             layer_outs = [self.layer.output[:,i] for i in range(n_outs)]
             post_fn = lambda r: np.swapaxes(r,0,1)
+
             self.attribution_units = layer_outs
                         
-        # Get outputs for convolutional intermediate layers
+        # Get outputs for convolutional intermediate layers.
         elif K.ndim(self.layer.output) == 4:
             if self.agg_fn is None:
                 n_outs = int(np.prod(K.int_shape(self.layer.output)[1:]))
-                # K.batch_flatten seems really slow at times, so we'll save the reshape for numpy
+                # K.batch_flatten seems really slow at times, so we'll save the 
+                # reshape for numpy.
                 layer_outs = [self.layer.output]
                 post_fn = lambda r: r[0].reshape((len(r[0]), -1))
-                self.attribution_units = K.transpose(K.batch_flatten(self.layer.output))
+
+                self.attribution_units = K.transpose(
+                    K.batch_flatten(self.layer.output))
             else:
-                # If the aggregation function is given, treat each filter as a unit of attribution
+                # If the aggregation function is given, treat each filter as a 
+                # unit of attribution.
                 if K.image_data_format() == 'channels_first':
                     n_outs = K.int_shape(self.layer.output)[1]
                     sel_fn = lambda g, i: self.agg_fn(g[:,i,:,:], axis=(1,2))
                 else:
                     n_outs = K.int_shape(self.layer.output)[3]
                     sel_fn = lambda g, i: self.agg_fn(g[:,:,:,i], axis=(1,2))
-                layer_outs = [sel_fn(self.layer.output, i) for i in range(n_outs)]
+                layer_outs = [
+                    sel_fn(self.layer.output, i) for i in range(n_outs)]
                 post_fn = lambda r: np.swapaxes(r,0,1)
+
                 self.attribution_units = layer_outs
         else:
-            assert False, "Unsupported tensor shape: ndim=%d" % K.ndim(self.layer.output)
+            raise ValueError(
+                'Unsupported tensor shape: ndim={}'
+                .format(K.ndim(self.layer.output)))
 
-        if hasattr(self.model, 'uses_learning_phase') and self.model.uses_learning_phase and K.backend() == 'theano':
-            grad_f = K.function([self.model.input, K.learning_phase()], layer_outs)
+        if (hasattr(self.model, 'uses_learning_phase') and 
+                self.model.uses_learning_phase and 
+                K.backend() == 'theano'):
+
+            grad_f = K.function(
+                [self.model.input, K.learning_phase()], 
+                layer_outs)
             self.dF = lambda inp: post_fn(np.array(grad_f([inp, 0])))
+
         else:
             grad_f = K.function([self.model.input], layer_outs)
             self.dF = lambda inp: post_fn(np.array(grad_f([inp])))
@@ -655,9 +670,13 @@ class Activation(AttributionMethod):
             
         return self
 
-    def get_attributions(self, x, baseline=None, resolution=10, match_layer_shape=False):
+    def get_attributions(self, 
+            x, 
+            baseline=None, 
+            resolution=10, 
+            match_layer_shape=False):
 
-        assert self.is_compiled, "Must compile before measuring attribution"
+        assert self.is_compiled, 'Must compile before measuring attribution.'
 
         if len(x.shape) == len(self.model.input_shape):
             used_batch = True
@@ -668,11 +687,12 @@ class Activation(AttributionMethod):
 
         attributions = self.dF(instance)
 
-        if match_layer_shape and np.prod(K.int_shape(self.layer.output)[1:])*len(instance) == np.prod(attributions.shape):
-            attributions = attributions.reshape((len(x),)+K.int_shape(self.layer.output)[1:])
+        if (match_layer_shape and 
+                np.prod(K.int_shape(self.layer.output)[1:])*len(instance) == 
+                    np.prod(attributions.shape)):
+
+            attributions = attributions.reshape(
+                (len(x),)+K.int_shape(self.layer.output)[1:])
 
         # Return in the same format as used by the caller.
-        if used_batch:
-            return attributions
-        else:
-            return attributions[0]
+        return attributions if used_batch else attributions[0]
