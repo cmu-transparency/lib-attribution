@@ -73,6 +73,8 @@ def top_slice(model, start_layer, input_tensor=None, clone=True):
     if clone:
         f = clone_model(model)
         start_layer = f.get_layer(start_layer.name)
+    else:
+        f = model
 
     # If input_tensor is not specified, we will make new input placeholders for
     # the top slice model.
