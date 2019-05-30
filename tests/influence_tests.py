@@ -84,16 +84,22 @@ def twoclass_model_internal_zero():
 
 def twoclass_model_internal_nonzero():
 	m = basic_twoclass_model()
+	
+	# the weights are correct, half 1, half 0
+	print(m.layers[1].get_weights()[0])
 
 	x = np.ones(shape=(1,10), dtype=np.float32)
 	x0 = np.array(x, copy=True)
 	x0[0,:5] = 0
 	x1 = np.array(x, copy=True)
-	x1[0,5:] = 0
+	x1[0,5:] = 1
 	X = np.tile(np.concatenate((x0,x1), axis=0), (100,1))
 
 	attr0 = InternalInfluence(m, 1).compile().get_attributions(x0)
 	attr1 = InternalInfluence(m, 1).compile().get_attributions(x1)
+
+	# now the weights are all set to 1
+	print(m.layers[1].get_weights()[0])
 
 	return attr0[0,:5].sum() + attr1[0,5:].sum() > 0
 
