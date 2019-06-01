@@ -117,4 +117,4 @@ def _model_on_prev_layer(l, l0, new_in):
     else:
         return l([
             _model_on_prev_layer(p, l0, new_in)
-            for p in get_inbound_layers(l)])
+            for p in _get_inbound_layers(l)])

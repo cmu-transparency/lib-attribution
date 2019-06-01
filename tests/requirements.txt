@@ -1,3 +1,5 @@
 keras
 tensorflow
 theano
+termcolor
+colorama

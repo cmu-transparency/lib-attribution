@@ -16,29 +16,6 @@ from .distributions import Doi
 from .model_utils import top_slice, clone_model
 from .quantities import Qoi
 
-
-# NOTE(mfredrik): This function is needed because the Keras backend does not 
-#   provide placeholder values when it initializes session variables. I haven't 
-#   been able to find any other reports of this issue, so there must be a better 
-#   workaround, but this routine seems to suffice at the moment.
-def init_tensorflow_session():
-    if K.backend() == 'tensorflow':
-        graph = K.get_session().graph
-
-        placeholders = [
-            op.values()[0] 
-            for op in graph.get_operations() 
-            if op.type == 'Placeholder' and 
-                None not in K.int_shape(op.values()[0])]
-        inits = [
-            np.ones(K.int_shape(p), dtype=K.dtype(p)) for p in placeholders]
-
-        K.get_session().run(
-            tf.global_variables_initializer(), 
-            feed_dict={
-                placeholders[p]: inits[p] for p in range(len(placeholders))})
-
-
 class InternalInfluence(AttributionMethod):
     '''
     Calculates attribution as the *Internal Influence* [1].
@@ -47,7 +24,7 @@ class InternalInfluence(AttributionMethod):
         Networks." 2018
     '''
     def __init__(self,
-            model, 
+            model_in, 
             layer, 
             agg_fn=K.max, 
             Q=None, 
@@ -87,11 +64,11 @@ class InternalInfluence(AttributionMethod):
             unit. Otherwise, the attribution of each unit will be simply the 
             influence of the unit.
         '''
-        super(InternalInfluence, self).__init__(model, layer)
+        super(InternalInfluence, self).__init__(model_in, layer)
 
         # Make a clone of the model so the computation graph can be modified
         # without affecting the original model.
-        self.model = clone_model(model)
+        self.model = clone_model(model_in)
         self.layer = self.model.get_layer(self.layer.name)
 
         self.agg_fn = agg_fn
@@ -221,11 +198,6 @@ class InternalInfluence(AttributionMethod):
 
         attribution_k_fn = K.function(self.attribution_params, [attributions])
 
-        if K.backend() == 'tensorflow':
-            K.manual_variable_initialization(True)
-            init_tensorflow_session()
-            K.manual_variable_initialization(False)
-
         def attribution_fn(x, **doiparams):
             x = x if isinstance(x, list) else [x]
             lp = [0] if learning_phase else []
@@ -352,7 +324,7 @@ class SaliencyMaps(InternalInfluence):
     [3] Simonyan et al. "Deep Inside Convolutional Networks: Visualizing Image 
         Classification Models and Saliency Maps." 2013
     '''
-    def __init__(self, arg):
+    def __init__(self, model):
         super(SaliencyMaps, self).__init__(
             model, 0, multiply_activation=False, agg_fn=None, D='point')
 
@@ -477,7 +449,7 @@ class AumannShapley(AttributionMethod):
         instance = self.get_features(x)
 
         if baseline is None:
-            baseline = self.get_features(np.zeros_like(x).astype(np.float32))
+            baseline = self.get_features(np.zeros_like(x, dtype=np.float32))
         assert baseline.shape == instance.shape
 
         attributions = np.zeros(self.p_fn(instance).shape).astype(np.float32)
@@ -588,7 +560,7 @@ class Conductance(AttributionMethod):
             instance = np.expand_dims(x, axis=0)
 
         if baseline is None:
-            baseline = np.zeros_like(instance).astype(np.float32)
+            baseline = np.zeros_like(instance, dtype=np.float32)
         assert baseline.shape == instance.shape
 
         attributions = np.zeros((instance.shape[0],self.n_outs)).astype(np.float32)

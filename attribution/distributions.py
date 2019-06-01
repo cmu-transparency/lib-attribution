@@ -51,8 +51,8 @@ class LinearInterpDoi(Doi):
 
     def __call__(self, z):
         # Make placeholders for the resolution and baseline.
-        r = K.placeholder(name='resolution', ndim=0, shape=(), dtype='int32')
-        baseline = K.placeholder(name='baseline', shape=K.int_shape(z)[1:])
+        r = K.variable(10)
+        baseline = K.variable(K.zeros(shape=K.int_shape(z)[1:]))
 
         b = K.expand_dims(baseline, axis=0)
 
