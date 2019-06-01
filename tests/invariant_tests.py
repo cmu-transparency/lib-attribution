@@ -41,8 +41,8 @@ def basic_binary_activation_quantity():
 	x1[0,5:] = 0
 	X = np.tile(np.concatenate((x0,x1), axis=0), (100,1))
 
-	x0_l = m.predict(x0).argmax(axis=1)
-	x1_l = m.predict(x1).argmax(axis=1)
+	# x0_l = m.predict(x0).argmax(axis=1)
+	# x1_l = m.predict(x1).argmax(axis=1)
 	
 	invs = ActivationInvariants(m, 
 								layers=[1], 
@@ -61,8 +61,8 @@ def basic_binary_activation_classes():
 	x1[0,5:] = 0
 	X = np.tile(np.concatenate((x0,x1), axis=0), (100,1))
 
-	x0_l = m.predict(x0).argmax(axis=1)
-	x1_l = m.predict(x1).argmax(axis=1)
+	# x0_l = m.predict(x0).argmax(axis=1)
+	# x1_l = m.predict(x1).argmax(axis=1)
 	
 	invs = ActivationInvariants(m, 
 								layers=[1], 
@@ -84,8 +84,8 @@ def basic_binary_activation_support():
 	x1[0,5:] = 0
 	X = np.tile(np.concatenate((x0,x1), axis=0), (100,1))
 
-	x0_l = m.predict(x0).argmax(axis=1)
-	x1_l = m.predict(x1).argmax(axis=1)
+	# x0_l = m.predict(x0).argmax(axis=1)
+	# x1_l = m.predict(x1).argmax(axis=1)
 	
 	invs = ActivationInvariants(m, 
 								layers=[1], 
@@ -106,8 +106,8 @@ def basic_binary_activation_precision():
 	x1[0,5:] = 0
 	X = np.tile(np.concatenate((x0,x1), axis=0), (100,1))
 
-	x0_l = m.predict(x0).argmax(axis=1)
-	x1_l = m.predict(x1).argmax(axis=1)
+	# x0_l = m.predict(x0).argmax(axis=1)
+	# x1_l = m.predict(x1).argmax(axis=1)
 	
 	invs = ActivationInvariants(m, 
 								layers=[1], 
@@ -128,8 +128,8 @@ def basic_binary_activation_evals():
 	x1[0,5:] = 0
 	X = np.tile(np.concatenate((x0,x1), axis=0), (100,1))
 
-	x0_l = m.predict(x0).argmax(axis=1)
-	x1_l = m.predict(x1).argmax(axis=1)
+	# x0_l = m.predict(x0).argmax(axis=1)
+	# x1_l = m.predict(x1).argmax(axis=1)
 	
 	invs = ActivationInvariants(m, 
 								layers=[1], 
@@ -143,27 +143,27 @@ def basic_binary_activation_evals():
 		if inv.Q == 1:
 			inv1_eval_good = inv.eval(x1)[0]
 	
-	return True
+	return inv0_eval_good and inv1_eval_good
 
-def basic_twoclass_model():
+# def basic_twoclass_model():
 
-	inp = keras.layers.Input(shape=(10,))
-	outp = keras.layers.Dense(10, kernel_initializer=keras.initializers.Ones(), bias_initializer=keras.initializers.Zeros())(inp)
-	outp = keras.layers.Dense(2, kernel_initializer=keras.initializers.Ones(), bias_initializer=keras.initializers.Zeros())(outp)
-	outp = keras.layers.Activation('softmax')(outp)
-	m = keras.Model(inp, outp)
-	m.compile(optimizer='sgd', loss='categorical_crossentropy')
+# 	inp = keras.layers.Input(shape=(10,))
+# 	outp = keras.layers.Dense(10, kernel_initializer=keras.initializers.Ones(), bias_initializer=keras.initializers.Zeros())(inp)
+# 	outp = keras.layers.Dense(2, kernel_initializer=keras.initializers.Ones(), bias_initializer=keras.initializers.Zeros())(outp)
+# 	outp = keras.layers.Activation('softmax')(outp)
+# 	m = keras.Model(inp, outp)
+# 	m.compile(optimizer='sgd', loss='categorical_crossentropy')
 
-	Wi = m.layers[1].get_weights()[0]
-	Wi[:5,:5] = 0
-	Wi[5:,5:] = 0
-	K.set_value(m.layers[1].weights[0], Wi)
-	Wf = m.layers[2].get_weights()[0]
-	Wf[:5,0] = 0
-	Wf[5:,1] = 0
-	K.set_value(m.layers[2].weights[0], Wf)
+# 	Wi = m.layers[1].get_weights()[0]
+# 	Wi[:5,:5] = 0
+# 	Wi[5:,5:] = 0
+# 	K.set_value(m.layers[1].weights[0], Wi)
+# 	Wf = m.layers[2].get_weights()[0]
+# 	Wf[:5,0] = 0
+# 	Wf[5:,1] = 0
+# 	K.set_value(m.layers[2].weights[0], Wf)
 
-	return m
+# 	return m
 
 def basic_threshold_activation_quantity():
 
@@ -176,8 +176,8 @@ def basic_threshold_activation_quantity():
 	x1[0,5:] = 0
 	X = np.tile(np.concatenate((x0,x1), axis=0), (100,1))
 
-	x0_l = m.predict(x0).argmax(axis=1)
-	x1_l = m.predict(x1).argmax(axis=1)
+	# x0_l = m.predict(x0).argmax(axis=1)
+	# x1_l = m.predict(x1).argmax(axis=1)
 	
 	invs = ActivationInvariants(m, 
 								layers=[1], 
@@ -197,8 +197,8 @@ def basic_threshold_activation_classes():
 	x1[0,5:] = 0
 	X = np.tile(np.concatenate((x0,x1), axis=0), (100,1))
 
-	x0_l = m.predict(x0).argmax(axis=1)
-	x1_l = m.predict(x1).argmax(axis=1)
+	# x0_l = m.predict(x0).argmax(axis=1)
+	# x1_l = m.predict(x1).argmax(axis=1)
 	
 	invs = ActivationInvariants(m, 
 								layers=[1], 
@@ -221,8 +221,8 @@ def basic_threshold_activation_support():
 	x1[0,5:] = 0
 	X = np.tile(np.concatenate((x0,x1), axis=0), (100,1))
 
-	x0_l = m.predict(x0).argmax(axis=1)
-	x1_l = m.predict(x1).argmax(axis=1)
+	# x0_l = m.predict(x0).argmax(axis=1)
+	# x1_l = m.predict(x1).argmax(axis=1)
 	
 	invs = ActivationInvariants(m, 
 								layers=[1], 
@@ -244,8 +244,8 @@ def basic_threshold_activation_precision():
 	x1[0,5:] = 0
 	X = np.tile(np.concatenate((x0,x1), axis=0), (100,1))
 
-	x0_l = m.predict(x0).argmax(axis=1)
-	x1_l = m.predict(x1).argmax(axis=1)
+	# x0_l = m.predict(x0).argmax(axis=1)
+	# x1_l = m.predict(x1).argmax(axis=1)
 	
 	invs = ActivationInvariants(m, 
 								layers=[1], 
@@ -267,8 +267,8 @@ def basic_threshold_activation_evals():
 	x1[0,5:] = 0
 	X = np.tile(np.concatenate((x0,x1), axis=0), (100,1))
 
-	x0_l = m.predict(x0).argmax(axis=1)
-	x1_l = m.predict(x1).argmax(axis=1)
+	# x0_l = m.predict(x0).argmax(axis=1)
+	# x1_l = m.predict(x1).argmax(axis=1)
 	
 	invs = ActivationInvariants(m, 
 								layers=[1], 
@@ -283,7 +283,7 @@ def basic_threshold_activation_evals():
 		if inv.Q == 1:
 			inv1_eval_good = inv.eval(x1)[0]
 	
-	return True
+	return inv0_eval_good and inv1_eval_good
 
 def all_tests():
 	run_test(basic_binary_activation_quantity)

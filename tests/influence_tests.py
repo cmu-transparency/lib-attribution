@@ -75,7 +75,7 @@ def twoclass_model_internal_zero():
 	x0[0,:5] = 0
 	x1 = np.array(x, copy=True)
 	x1[0,5:] = 0
-	X = np.tile(np.concatenate((x0,x1), axis=0), (100,1))
+	# X = np.tile(np.concatenate((x0,x1), axis=0), (100,1))
 
 	attr0 = InternalInfluence(m, 1).compile().get_attributions(x0)
 	attr1 = InternalInfluence(m, 1).compile().get_attributions(x1)
@@ -93,7 +93,7 @@ def twoclass_model_internal_nonzero():
 	x0[0,:5] = 0
 	x1 = np.array(x, copy=True)
 	x1[0,5:] = 1
-	X = np.tile(np.concatenate((x0,x1), axis=0), (100,1))
+	# X = np.tile(np.concatenate((x0,x1), axis=0), (100,1))
 
 	attr0 = InternalInfluence(m, 1).compile().get_attributions(x0)
 	attr1 = InternalInfluence(m, 1).compile().get_attributions(x1)

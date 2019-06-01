@@ -2,7 +2,7 @@ import os
 os.environ["KERAS_BACKEND"]="tensorflow"
 
 import numpy as np
-from all_tests import *
+from all_tests import all_tests
 
 import tensorflow as tf
 import keras

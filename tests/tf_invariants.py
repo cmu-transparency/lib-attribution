@@ -2,7 +2,7 @@ import os
 os.environ["KERAS_BACKEND"]="tensorflow"
 
 import numpy as np
-from invariant_tests import *
+from invariant_tests import all_tests
 
 if __name__ == "__main__":
 	np.random.seed(0)
