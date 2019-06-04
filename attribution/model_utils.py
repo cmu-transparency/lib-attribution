@@ -14,7 +14,7 @@ def clone_model(model):
     return m2
 
 def replace_softmax_with_logits(model, softmax_layer=-1):
-    model_p = keras.models.clone_model(model)
+    model_p = clone_model(model)
     model_p.layers[softmax_layer].activation = keras.activations.linear
     tmp_path = os.path.join(
         tempfile.gettempdir(), 

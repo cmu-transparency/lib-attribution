@@ -5,7 +5,7 @@ import keras.backend as K
 
 from sklearn import tree
 
-from .methods import AumannShapley
+from .methods import InternalInfluence
 from .invariant import Literal, Clause, Invariant
 
 class InfluenceInvariants(object):
@@ -21,7 +21,7 @@ class InfluenceInvariants(object):
         if Q is None:
             self.Q = K.argmax(model.output, axis=1)
 
-        self._attributers = [AumannShapley(model, layer, agg_fn=agg_fn) for layer in self.layers]
+        self._attributers = [InternalInfluence(model, layer, agg_fn=agg_fn) for layer in self.layers]
         self._is_compiled = False
 
     def _get_influence(self, x):
@@ -31,7 +31,7 @@ class InfluenceInvariants(object):
             x = np.expand_dims(x, axis=0)
 
         acts = np.concatenate(
-                [np.sign(self._attributers[i].get_attributions(x)).reshape(len(x), -1)
+                [np.sign(self._attributers[i].get_attributions(x, batch_size=1)).reshape(len(x), -1)
                     for i in range(len(self._attributers))], axis=1)
 
         qs = self.QF(x)
@@ -86,9 +86,9 @@ class InfluenceInvariants(object):
                 layer, _, unit = map_feat_to_layer(clf.tree_.feature[node])
                 # IMPORTANT: This is currently wrong, needs to be fixed so that
                 # au returns the *attribution* (not activation) of the appropriate unit
-                au = self._attributers[layer].attribution_units[unit]
-                lit_f = Literal(self.layers[layer], unit, 0, attribution_unit=au)
-                lit_t = Literal(self.layers[layer], unit, 1, attribution_unit=au)
+                au = self._attributers[layer].symbolic_attributions[unit]
+                lit_f = Literal(self.layers[layer], unit, K.less_equal, 0, attribution_unit=au)
+                lit_t = Literal(self.layers[layer], unit, K.greater, 0, attribution_unit=au)
                 stack.append((clf.tree_.children_left[node], 
                                 clause.add_literal(lit_f, copy_self=True)))
                 stack.append((clf.tree_.children_right[node], 

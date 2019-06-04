@@ -215,6 +215,7 @@ class InternalInfluence(AttributionMethod):
             baseline=None, 
             resolution=10, 
             match_layer_shape=False,
+            batch_size=None,
             **doi_params):
         '''
         Parameters
@@ -234,7 +235,7 @@ class InternalInfluence(AttributionMethod):
             `resolution` specifies the number of points to sample in the linear
             interpolation between the baseline and the instance. Using a
             resolution of 1 is equivalent to using `distribution='point'`.
-        match_layer_shape: bool
+        match_layer_shape: bool, optional
             If `match_layer_shape` is True, the resulting attributions will
             match the shape of the internal layer's output 
             (`self.layer.output_shape`). Otherwise the resulting attributions
@@ -244,6 +245,11 @@ class InternalInfluence(AttributionMethod):
             layer, or if `self.agg_fn` is not None, the array of attributions 
             will match the layer shape regardless, so this parameter is 
             irrelevant.
+        batch_size: int, optional
+            If `batch_size` is an integer, then attributions will be computed
+            by breaking `x` into batches of the specified size and concatenating
+            the output afterwards. If None (default), `x` will be processed
+            as-is without any batching.
         **doi_params : optional
             Additional parameters to be passed into the distribution of 
             interest.
@@ -290,7 +296,19 @@ class InternalInfluence(AttributionMethod):
             raise ValueError(
                 '`doi_params` must include parameter: {}.'.format(e))
 
-        attributions = self.attribution_fn(x, **used_doi_params)
+        if batch_size is None:
+            attributions = self.attribution_fn(x, **used_doi_params)
+        elif isinstance(batch_size, int):
+            cb = 0
+            attributions = []
+            while cb < len(x):
+                b = x[cb:cb+batch_size]
+                attributions.append(self.attribution_fn(b, **used_doi_params))
+                cb += batch_size
+            attributions = np.concatenate(attributions, axis=0)
+        else:
+            raise ValueError(
+                '`batch_size` must be either None or int: {}.'.format(batch_size))
 
         # If we didn't specify to match the layer shape, flatten the output.
         if not match_layer_shape and self.agg_fn is None:
