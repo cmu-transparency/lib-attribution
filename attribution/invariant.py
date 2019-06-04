@@ -105,6 +105,7 @@ class Invariant(object):
             if self._T is None:
                 self.get_tensor(attributers=attributers)
             exe = K.function([self.model.input], [self._T])
+            # exe = K.function([self.attributers[0].model.input], [self._T])
             self._exe = lambda x: exe([x])[0]
 
         return self._exe

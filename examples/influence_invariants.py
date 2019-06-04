@@ -9,7 +9,7 @@ except:
 
 #%%
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+# os.environ["CUDA_VISIBLE_DEVICES"]="1"
 os.environ["KERAS_BACKEND"]="tensorflow"
 
 #%%
@@ -142,7 +142,7 @@ from attribution.ActivationInvariants import ActivationInvariants
 from attribution.InfluenceInvariants import InfluenceInvariants
 
 actinv = ActivationInvariants(model, layers=[9], agg_fn=None).compile()
-infinv = InfluenceInvariants(model, layers=[9], agg_fn=None).compile()
+infinv = InfluenceInvariants(model, layer=9, agg_fn=None).compile()
 
 #%%
 invs_act = actinv.get_invariants(im_tr)
@@ -150,10 +150,29 @@ invs_act = actinv.get_invariants(im_tr)
 #%%
 invs_inf = infinv.get_invariants(im_tr)
 
+#%% [markdown]
+# # Results: comparing activation to influence invariants
+
 #%%
 supports_act = [inv.support for inv in invs_act]
 supports_inf = [inv.support for inv in invs_inf]
 print('# invariants: {} (act), {} (inf)\n'.format(len(invs_act), len(invs_inf)))
 print('avg support: {:.2} (act), {:.2} (inf)'.format(np.array(supports_act).mean(), np.array(supports_inf).mean()))
+
+#%% [markdown]
+# ## More detail: influence
+# We see that there are just seven influence invariants that cover the entire training set with perfect precision
+
+#%%
+for inv in invs_inf:
+    print(inv)
+
+#%% [markdown]
+# ## More detail: activation
+# There are 132 activation invariants to cover the training set
+
+#%%
+for inv in invs_act[:10]:
+    print(inv)
 
 #%%
