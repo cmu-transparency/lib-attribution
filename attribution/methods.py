@@ -173,7 +173,7 @@ class InternalInfluence(AttributionMethod):
                 'Unsupported tensor shape: ndim={}'
                 .format(K.ndim(self.layer.output)))
 
-        self.symbolic_attributions = attribution
+        self.symbolic_attributions = K.batch_flatten(attribution)
 
         return attribution
 
@@ -670,6 +670,7 @@ class Activation(AttributionMethod):
             x, 
             baseline=None, 
             resolution=10, 
+            batch_size=None,
             match_layer_shape=False):
 
         assert self.is_compiled, 'Must compile before measuring attribution.'
@@ -681,7 +682,19 @@ class Activation(AttributionMethod):
             used_batch = False
             instance = np.expand_dims(x, axis=0)
 
-        attributions = self.dF(instance)
+        if batch_size is None:
+            attributions = self.dF(instance)
+        elif isinstance(batch_size, int):
+            cb = 0
+            attributions = []
+            while cb < len(x):
+                b = x[cb:cb+batch_size]
+                attributions.append(self.dF(b))
+                cb += batch_size
+            attributions = np.concatenate(attributions, axis=0)
+        else:
+            raise ValueError(
+                '`batch_size` must be either None or int: {}.'.format(batch_size))
 
         if (match_layer_shape and 
                 np.prod(K.int_shape(self.layer.output)[1:])*len(instance) == 

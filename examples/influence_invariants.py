@@ -1,13 +1,5 @@
-#%% Change working directory from the workspace root to the ipynb file location. Turn this addition off with the DataScience.changeDirOnImportExport setting
-# ms-python.python added
-import os
-try:
-	os.chdir(os.path.join(os.getcwd(), 'examples'))
-	print(os.getcwd())
-except:
-	pass
-
 #%%
+import os
 os.environ["CUDA_DEVICE_ORDER"]="PCI_BUS_ID"   # see issue #152
 # os.environ["CUDA_VISIBLE_DEVICES"]="1"
 os.environ["KERAS_BACKEND"]="tensorflow"
@@ -35,7 +27,7 @@ K.set_image_data_format('channels_last')
 
 #%%
 from matplotlib import pyplot as plt
-get_ipython().run_line_magic('matplotlib', 'inline')
+# get_ipython().run_line_magic('matplotlib', 'inline')
 
 # helper to simplify displaying multiple images
 def imshow(image, width=64, height=64, size=None):
@@ -120,7 +112,7 @@ model.summary()
 # `model.fit(im_tr, y_tr, batch_size=32, epochs=40, validation_data=(im_te, y_te))`
 
 #%%
-model.load_weights('weights/lfw-small-tf.h5')
+model.load_weights('examples/weights/lfw-small-tf.h5')
 
 #%%
 print('accuracy:')
@@ -141,38 +133,19 @@ model = replace_softmax_with_logits(model)
 from attribution.ActivationInvariants import ActivationInvariants
 from attribution.InfluenceInvariants import InfluenceInvariants
 
-actinv = ActivationInvariants(model, layers=[9], agg_fn=None).compile()
-infinv = InfluenceInvariants(model, layer=9, agg_fn=None).compile()
-
 #%%
-invs_act = actinv.get_invariants(im_tr)
+for layer in range(1,len(model.layers)-1):
+    actinv = ActivationInvariants(model, layers=[layer], agg_fn=None).compile()
+    infinv = InfluenceInvariants(model, layer=layer, agg_fn=None).compile()
 
-#%%
-invs_inf = infinv.get_invariants(im_tr)
+    invs_act = actinv.get_invariants(im_tr)
+    invs_inf = infinv.get_invariants(im_tr)
 
-#%% [markdown]
-# # Results: comparing activation to influence invariants
+    supports_act = [inv.support for inv in invs_act]
+    supports_inf = [inv.support for inv in invs_inf]
+    print('layer {}, act: #={}, avg supp.: {:.2}'.format(layer, len(invs_act), np.array(supports_act).mean()))
+    print('layer {}, inf: #={}, avg supp.: {:.2}'.format(layer, len(invs_inf), np.array(supports_inf).mean()))
+    print('-'*20)
 
-#%%
-supports_act = [inv.support for inv in invs_act]
-supports_inf = [inv.support for inv in invs_inf]
-print('# invariants: {} (act), {} (inf)\n'.format(len(invs_act), len(invs_inf)))
-print('avg support: {:.2} (act), {:.2} (inf)'.format(np.array(supports_act).mean(), np.array(supports_inf).mean()))
-
-#%% [markdown]
-# ## More detail: influence
-# We see that there are just seven influence invariants that cover the entire training set with perfect precision
-
-#%%
-for inv in invs_inf:
-    print(inv)
-
-#%% [markdown]
-# ## More detail: activation
-# There are 132 activation invariants to cover the training set
-
-#%%
-for inv in invs_act[:10]:
-    print(inv)
 
 #%%

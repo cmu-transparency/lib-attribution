@@ -33,7 +33,7 @@ class ActivationInvariants(object):
 
         if self.binary_feats:
             acts = np.concatenate(
-                    [np.where(self._attributers[i].get_attributions(x) != 0., 1, 0).reshape(len(x), -1)
+                    [np.where(self._attributers[i].get_attributions(x, batch_size=1) != 0., 1, 0).reshape(len(x), -1)
                         for i in range(len(self._attributers))], axis=1)
         else:
             acts = np.concatenate(
