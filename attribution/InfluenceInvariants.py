@@ -68,11 +68,10 @@ class InfluenceInvariants(object):
         while len(stack) > 0:
             node, clause = stack.pop()
             if(clf.tree_.children_left[node] != clf.tree_.children_right[node]):
-                # _, _, unit = map_feat_to_layer(clf.tree_.feature[node])
                 unit = clf.tree_.feature[node]
-                au = self._attributer.symbolic_attributions[:,unit]
-                lit_f = Literal(self.layer, unit, K.less_equal, 0, attribution_unit=au)
-                lit_t = Literal(self.layer, unit, K.greater, 0, attribution_unit=au)
+                au = K.sign(self._attributer.symbolic_attributions[:,unit])
+                lit_f = Literal(self.layer, unit, K.less_equal, clf.tree_.threshold[node], attribution_unit=au)
+                lit_t = Literal(self.layer, unit, K.greater, clf.tree_.threshold[node], attribution_unit=au)
                 stack.append((clf.tree_.children_left[node], 
                                 clause.add_literal(lit_f, copy_self=True)))
                 stack.append((clf.tree_.children_right[node], 

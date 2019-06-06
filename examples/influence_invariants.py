@@ -138,14 +138,20 @@ for layer in range(1,len(model.layers)-1):
     actinv = ActivationInvariants(model, layers=[layer], agg_fn=None).compile()
     infinv = InfluenceInvariants(model, layer=layer, agg_fn=None).compile()
 
-    invs_act = actinv.get_invariants(im_tr)
-    invs_inf = infinv.get_invariants(im_tr)
+    invs_act = actinv.get_invariants(im_tr, batch_size=1)
+    invs_inf = infinv.get_invariants(im_tr, batch_size=1)
 
     supports_act = [inv.support for inv in invs_act]
     supports_inf = [inv.support for inv in invs_inf]
     print('layer {}, act: #={}, avg supp.: {:.2}'.format(layer, len(invs_act), np.array(supports_act).mean()))
     print('layer {}, inf: #={}, avg supp.: {:.2}'.format(layer, len(invs_inf), np.array(supports_inf).mean()))
     print('-'*20)
+
+
+#%%
+
+
+#%%
 
 
 #%%

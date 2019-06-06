@@ -63,6 +63,7 @@ class Clause(object):
             clause = [lit.get_tensor() for lit in self.literals]
 
         return K.expand_dims(K.all(K.concatenate(clause, axis=1), axis=1), axis=1)
+        # return K.all(K.concatenate(clause, axis=1), axis=1, keepdims=True)
 
     def get_executable(self, model, attributers=None):
         t = self.get_tensor(attributers=attributers)
@@ -105,17 +106,30 @@ class Invariant(object):
             if self._T is None:
                 self.get_tensor(attributers=attributers)
             exe = K.function([self.model.input], [self._T])
-            # exe = K.function([self.attributers[0].model.input], [self._T])
             self._exe = lambda x: exe([x])[0]
 
         return self._exe
 
-    def eval(self, x, attributers=None):
+    def eval(self, x, attributers=None, batch_size=None):
         if self._exe is None:
             self.get_executable(attributers=attributers)
         if np.ndim(x) == K.ndim(self.model.input) - 1:
             x = np.expand_dims(x, 0)
-        return self._exe(x)
+        if batch_size is None:
+            rv = self._exe(x)
+        elif isinstance(batch_size, int):
+            cb = 0
+            rv = []
+            while cb < len(x):
+                b = x[cb:cb+batch_size]
+                rv.append(self._exe(b))
+                cb += batch_size
+            rv = np.concatenate(rv, axis=0)
+        else:
+            raise ValueError(
+                '`batch_size` must be either None or int: {}.'.format(batch_size))            
+
+        return rv
 
     def __str__(self):
         s = "\nor\n".join(["(" + str(clause) + ")" for clause in self.clauses])
