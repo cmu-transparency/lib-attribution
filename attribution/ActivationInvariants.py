@@ -25,7 +25,7 @@ class ActivationInvariants(object):
         self._attributers = [Activation(model, layer, agg_fn=agg_fn) for layer in self.layers]
         self._is_compiled = False
 
-    def _get_activations(self, x):
+    def _get_activations(self, x, batch_size=None):
         if not self._is_compiled:
             self.compile()
         if np.ndim(x) == K.ndim(self.model.input) - 1:
@@ -33,7 +33,7 @@ class ActivationInvariants(object):
 
         if self.binary_feats:
             acts = np.concatenate(
-                    [np.where(self._attributers[i].get_attributions(x, batch_size=1) != 0., 1, 0).reshape(len(x), -1)
+                    [np.where(self._attributers[i].get_attributions(x, batch_size=batch_size) != 0., 1, 0).reshape(len(x), -1)
                         for i in range(len(self._attributers))], axis=1)
         else:
             acts = np.concatenate(
@@ -67,7 +67,7 @@ class ActivationInvariants(object):
 
         return self
 
-    def get_invariants(self, x, min_support=None, min_precision=1.0, **kwargs):
+    def get_invariants(self, x, min_support=None, min_precision=1.0, batch_size=None, **kwargs):
 
         assert self._is_compiled
 
@@ -78,7 +78,7 @@ class ActivationInvariants(object):
                     return i, self.layers[i], feat-l
             return None
 
-        feats, y = self._get_activations(x)
+        feats, y = self._get_activations(x, batch_size=batch_size)
         clf = tree.DecisionTreeClassifier(**kwargs)
         clf = clf.fit(feats, y)
 

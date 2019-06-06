@@ -24,13 +24,13 @@ class InfluenceInvariants(object):
         self._attributer = InternalInfluence(model, self.layer, agg_fn=agg_fn)
         self._is_compiled = False
 
-    def _get_influence(self, x):
+    def _get_influence(self, x, batch_size=None):
         if not self._is_compiled:
             self.compile()
         if np.ndim(x) == K.ndim(self.model.input) - 1:
             x = np.expand_dims(x, axis=0)
 
-        acts = np.sign(self._attributer.get_attributions(x, batch_size=1)).reshape(len(x), -1)
+        acts = np.sign(self._attributer.get_attributions(x, batch_size=batch_size)).reshape(len(x), -1)
 
         qs = self.QF(x)
 
@@ -53,18 +53,11 @@ class InfluenceInvariants(object):
 
         return self
 
-    def get_invariants(self, x, min_support=None, min_precision=1.0, **kwargs):
+    def get_invariants(self, x, min_support=None, min_precision=1.0, batch_size=None, **kwargs):
 
         assert self._is_compiled
 
-        # def map_feat_to_layer(feat):
-        #     for i in range(len(self._feat_ranges)):
-        #         l, h = self._feat_ranges[i]
-        #         if l <= feat and feat <= h:
-        #             return i, self.layer, feat-l
-        #     return None
-
-        feats, y = self._get_influence(x)
+        feats, y = self._get_influence(x, batch_size=batch_size)
         clf = tree.DecisionTreeClassifier(**kwargs)
         clf = clf.fit(feats, y)
 
