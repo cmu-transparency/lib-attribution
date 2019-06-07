@@ -11,6 +11,7 @@ warnings.simplefilter('ignore')
 
 import argparse
 import time
+import csv
 
 import numpy as np
 import keras
@@ -19,6 +20,8 @@ import keras.backend as K
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+
+from collections import ChainMap
 
 from models import get_model, get_data, get_available_models
 from attribution.ActivationInvariants import ActivationInvariants
@@ -78,7 +81,44 @@ def plot_results(r1, r2, ylab, xlab, title, r1lab, r2lab, filename, width=0.35):
     ax.set_title(title)
     ax.set_xticks(list(r1.keys()))
     ax.legend()
-    plt.savefig(os.path.join(result_prefix, filename))
+    plt.savefig(os.path.join(result_prefix, filename+'.png'))
+
+def invariants_csv(invs_by_layer, filename):
+    features = ['layer', 'Q', 'support', 'precision']
+
+def do_total(x, model, act_invs, inf_invs, batch_size):
+    features = ['layer', 'class_lab', 'n_invs_act', 'n_invs_inf', 'support_act', 'support_inf', 'precision_act', 'precision_inf']
+    csvfile = open(os.path.join(result_prefix, 'stats_total_test.csv'), 'w', newline='')
+    writer = csv.DictWriter(csvfile, fieldnames=features, quoting=csv.QUOTE_NONE)
+    writer.writeheader()
+    for layer in range(len(model.layers)-2):
+        print('\tlayer {}'.format(layer), end=' ')
+        sys.stdout.flush()
+        time0 = time.time()
+        n_per_act, sup_act_te, prec_act_te = tally_total_invs(act_invs[layer], model, x, batch_size=batch_size)
+        time1 = time.time()
+        print('[act: {:.2f}]'.format(time1-time0), end=' ')
+        sys.stdout.flush()
+        time0 = time.time()
+        n_per_inf, sup_inf_te, prec_inf_te = tally_total_invs(inf_invs[layer], model, x, batch_size=batch_size)
+        time1 = time.time()
+        print('[inf: {:.2f}]'.format(time1-time0))
+        plot_results(n_per_act, n_per_inf, '# invariants', 'class lab.', '# invariants (total)', 'act', 'inf', 'n_per_l{}'.format(layer))
+        plot_results(sup_act_te, sup_inf_te, 'support', 'class lab.', 'support (total, test)', 'act', 'inf', 'support_test_l{}'.format(layer))
+        plot_results(prec_act_te, prec_inf_te, 'precision', 'class lab.', 'precision (total, test)', 'act', 'inf', 'precision_test_l{}'.format(layer))
+
+        for cl in n_per_act.keys():
+            csvrow = ({'layer': layer,
+                        'class_lab': cl,
+                        'n_invs_act': n_per_act[cl],
+                        'n_invs_inf': n_per_inf[cl],
+                        'support_act': '{:.4}'.format(sup_act_te[cl]),
+                        'support_inf': '{:.4}'.format(sup_inf_te[cl]),
+                        'precision_act': '{:.4}'.format(prec_act_te[cl]),
+                        'precision_inf': '{:.4}'.format(prec_inf_te[cl])})
+            writer.writerow(csvrow)
+        csvfile.flush()
+    csvfile.close()
 
 def main():
 
@@ -86,6 +126,8 @@ def main():
     parser.add_argument('--model', choices=get_available_models())
     parser.add_argument('--batch_size', type=int, default=10)
     parser.add_argument('--do_train', action='store_true')
+    parser.add_argument('--do_total', action='store_true')
+    parser.add_argument('--do_average', action='store_true')
     args = parser.parse_args()
 
     model_nm = args.model
@@ -108,42 +150,8 @@ def main():
     time1 = time.time()
     print('\t[{:.2f}s]'.format(time1-time0))
 
-    if args.do_train:
-        print('TRAIN')
-        for layer in range(len(model.layers)-2):
-            print('\tlayer {}'.format(layer), end=' ')
-            sys.stdout.flush()
-            time0 = time.time()
-            n_per_act_tr, sup_act_tr, prec_act_tr = tally_total_invs(act_invs[layer], model, x_tr, batch_size=batch_size)
-            time1 = time.time()
-            print('[act: {:.2f}]'.format(time1-time0), end=' ')
-            sys.stdout.flush()
-            time0 = time.time()
-            n_per_inf_tr, sup_inf_tr, prec_inf_tr = tally_total_invs(inf_invs[layer], model, x_tr, batch_size=batch_size)
-            time1 = time.time()
-            print('[inf: {:.2f}]'.format(time1-time0))
-            plot_results(n_per_act_tr, n_per_inf_tr, '# invs', 'class lab.', '# invs (all classes)', 'act', 'inf', 'n_invs.png')
-            plot_results(sup_act_tr, sup_inf_tr, 'support', 'class lab.', 'support (total)', 'act', 'inf', 'support_train.png')
-            plot_results(prec_act_tr, prec_inf_tr, 'precision', 'class lab.', 'precision (total)', 'act', 'inf', 'precision_train.png')
-
-    print('\nTEST')
-    for layer in range(len(model.layers)-2):
-        print('\tlayer {}'.format(layer), end=' ')
-        sys.stdout.flush()
-        time0 = time.time()
-        n_per_act, sup_act_te, prec_act_te = tally_total_invs(act_invs[layer], model, x_te, batch_size=batch_size)
-        time1 = time.time()
-        print('[act: {:.2f}]'.format(time1-time0), end=' ')
-        sys.stdout.flush()
-        time0 = time.time()
-        n_per_inf, sup_inf_te, prec_inf_te = tally_total_invs(inf_invs[layer], model, x_te, batch_size=batch_size)
-        time1 = time.time()
-        print('[inf: {:.2f}]'.format(time1-time0))
-        if not args.do_train:
-            plot_results(n_per_act, n_per_inf, '# invariants', 'class lab.', '# invariants (total)', 'act', 'inf', 'n_per_l{}.png'.format(layer))
-        plot_results(sup_act_te, sup_inf_te, 'support', 'class lab.', 'support (total, test)', 'act', 'inf', 'support_test_l{}.png'.format(layer))
-        plot_results(prec_act_te, prec_inf_te, 'precision', 'class lab.', 'precision (total, test)', 'act', 'inf', 'precision_test_l{}.png'.format(layer))
-    
+    if args.do_total:
+        do_total(x_te, model, act_invs, inf_invs, batch_size)
     
 
 if __name__ == '__main__':
