@@ -85,6 +85,20 @@ def plot_results(r1, r2, ylab, xlab, title, r1lab, r2lab, filename, width=0.35):
 
 def invariants_csv(invs_by_layer, filename):
     features = ['layer', 'Q', 'support', 'precision']
+    csvfile = open(os.path.join(result_prefix, filename+'.csv'), 'w', newline='')
+    writer = csv.DictWriter(csvfile, fieldnames=features, quoting=csv.QUOTE_NONE)
+
+    for layer in range(len(invs_by_layer)):
+        invs = invs_by_layer[layer]
+        for inv in invs:
+            csvrow = {'layer': layer,
+                        'Q': inv.Q,
+                        'support': '{:.4}'.format(inv.support),
+                        'precision': '{:.4}'.format(inv.precision)}
+            writer.writerow(csvrow)
+            csvfile.flush()
+
+    csvfile.close()
 
 def do_total(x, model, act_invs, inf_invs, batch_size):
     features = ['layer', 'class_lab', 'n_invs_act', 'n_invs_inf', 'support_act', 'support_inf', 'precision_act', 'precision_inf']
@@ -143,12 +157,14 @@ def main():
     act_invs = [gen.get_invariants(x_tr, batch_size=batch_size) for gen in act_invgens]
     time1 = time.time()
     print('\t[{:.2f}s]'.format(time1-time0))
+    invariants_csv(act_invs, 'invariants_act')
     print('\n\nfinding influence invariants')
     time0 = time.time()
     inf_invgens = [InfluenceInvariants(model, layer=i, agg_fn=None).compile() for i in range(1,len(model.layers)-1)]
     inf_invs = [gen.get_invariants(x_tr, batch_size=1) for gen in inf_invgens]
     time1 = time.time()
     print('\t[{:.2f}s]'.format(time1-time0))
+    invariants_csv(inf_invs, 'invariants_inf')
 
     if args.do_total:
         do_total(x_te, model, act_invs, inf_invs, batch_size)
