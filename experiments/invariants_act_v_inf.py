@@ -27,49 +27,11 @@ from models import get_model, get_data, get_available_models
 from attribution.ActivationInvariants import ActivationInvariants
 from attribution.InfluenceInvariants import InfluenceInvariants
 from attribution.model_utils import replace_softmax_with_logits
-from attribution.invariant_utils import merge_by_Q
+from attribution.invariant_utils import merge_by_Q, inv_precision, inv_support, tally_total_stats
 
 K.set_image_data_format('channels_last')
 
 result_prefix = os.path.join(os.path.dirname(os.path.realpath(__file__)), 'results', 'invariants_act_v_inf')
-
-def inv_precision(inv, model, x, batch_size=None):
-    cl = inv.Q
-    inv_evs = inv.eval(x, batch_size=batch_size)
-    inv_inds = np.where(inv_evs)[0]
-    if len(inv_inds) > 0:
-        x_inv = x[inv_inds]
-        cl_inds = np.where(model.predict(x_inv, batch_size=batch_size).argmax(axis=1) == cl)[0]
-        return float(len(cl_inds))/float(len(x_inv))
-    else:
-        return 1.
-
-def inv_support(inv, model, x, batch_size=None):
-    cl = inv.Q
-    x_cl = x[np.where(model.predict(x, batch_size=batch_size).argmax(axis=1) == cl)[0]]
-    if len(x_cl) == 0:
-        return 1.
-    inv_evs = inv.eval(x_cl, batch_size=batch_size)
-    inv_inds = np.where(inv_evs)[0]
-    return float(len(inv_inds))/float(len(x_cl))
-
-def tally_total_invs(invs, model, x, batch_size=None):
-
-    classes = list(range(model.output.shape[1]))
-    n_per_class = {cls: 0 for cls in classes}
-    support = {cls: 0 for cls in classes}
-    precision = {cls: 0 for cls in classes}
-
-    for inv in invs:
-        n_per_class[inv.Q] += 1
-
-    invs = merge_by_Q(invs)
-
-    for inv in invs:
-        support[inv.Q] += inv_support(inv, model, x, batch_size=batch_size)
-        precision[inv.Q] += inv_precision(inv, model, x, batch_size=batch_size)
-
-    return n_per_class, support, precision
 
 def plot_results(r1, r2, ylab, xlab, title, r1lab, r2lab, filename, width=0.35):
     _, ax = plt.subplots()
