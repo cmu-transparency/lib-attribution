@@ -60,3 +60,22 @@ def tally_total_stats(invs, model, x, batch_size=None):
         precision[inv.Q] += inv_precision(inv, model, x, batch_size=batch_size)
 
     return n_per_class, support, precision
+
+def get_clause_units(c):
+    return set([l.unit for l in c.literals])
+
+def get_invariant_units(inv):
+    units = []
+    for c in inv.clauses:
+        if isinstance(c, Invariant):
+            units.extend(list(get_invariant_units(c)))
+        elif isinstance(c, Clause):
+            units.extend(list(get_clause_units(c)))
+    
+    print(set(units))
+    return set(units)
+
+def probits_from_invariants(invs):
+    invs_by_q = merge_by_Q(invs)
+    tensors_by_q = [K.expand_dims(inv.get_tensor(), 1) for inv in invs_by_q]
+    return K.concatenate(tensors_by_q, axis=1)
