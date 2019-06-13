@@ -215,7 +215,7 @@ class InternalInfluence(AttributionMethod):
             baseline=None, 
             resolution=10, 
             match_layer_shape=False,
-            batch_size=None,
+            batch_size=1,
             **doi_params):
         '''
         Parameters

@@ -13,15 +13,19 @@ def clone_model(model):
     m2.set_weights(model.get_weights())
     return m2
 
-def replace_softmax_with_logits(model, softmax_layer=-1):
+def replace_softmax_with_logits(model, softmax_layer=-1, custom_objects=None):
     model_p = clone_model(model)
+    model_p.compile(model.optimizer, model.loss_functions, model.metrics_names[1:])
     model_p.layers[softmax_layer].activation = keras.activations.linear
     tmp_path = os.path.join(
         tempfile.gettempdir(), 
         next(tempfile._get_candidate_names()) + '.h5')
     try:
         model_p.save(tmp_path)
-        return keras.models.load_model(tmp_path)
+        # model_p.save_weights(tmp_path)
+        return keras.models.load_model(tmp_path, custom_objects=custom_objects)
+        # model_p.load_weights(tmp_path)
+        return model_p
     finally:
         os.remove(tmp_path)
 

@@ -34,7 +34,7 @@ class ClassQoi(Qoi):
         self.c = c
 
     def __call__(self, g):
-        return model.g[:, self.c]
+        return g[:, self.c]
 
 
 class ComparativeQoi(Qoi):
@@ -46,10 +46,10 @@ class ComparativeQoi(Qoi):
 
     def __call__(self, g):
         output_c1 = (
-            g.output[:,c1].mean(axis=1) if isinstance(self.c1, list) else
-            g.output[:,c1])
+            g.output[:,self.c1].mean(axis=1) if isinstance(self.c1, list) else
+            g.output[:,self.c1])
         output_c2 = (
-            g.output[:,c2].mean(axis=1) if isinstance(self.c2, list) else
-            g.output[:,c2])
+            g.output[:,self.c2].mean(axis=1) if isinstance(self.c2, list) else
+            g.output[:,self.c2])
 
         return output_c1 - output_c2     
