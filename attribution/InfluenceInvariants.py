@@ -10,7 +10,7 @@ from .invariant import Literal, Clause, Invariant
 
 class InfluenceInvariants(object):
 
-    def __init__(self, model, layer=None, agg_fn=K.max, Q=None):
+    def __init__(self, model, layer=None, agg_fn=K.max, Q=None, multiply_activation=True):
         self.model = model
         self.agg_fn = agg_fn
         self.layer = layer
@@ -21,7 +21,7 @@ class InfluenceInvariants(object):
         if Q is None:
             self.Q = K.argmax(model.output, axis=1)
 
-        self._attributer = InternalInfluence(model, self.layer, agg_fn=agg_fn)
+        self._attributer = InternalInfluence(model, self.layer, agg_fn=agg_fn, multiply_activation=multiply_activation)
         self._is_compiled = False
 
     def _get_influence(self, x, batch_size=None):

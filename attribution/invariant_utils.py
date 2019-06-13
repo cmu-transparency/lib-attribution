@@ -75,7 +75,39 @@ def get_invariant_units(inv):
     print(set(units))
     return set(units)
 
-def probits_from_invariants(invs):
+def logit_tensor_from_invariants(invs):
     invs_by_q = merge_by_Q(invs)
-    tensors_by_q = [K.expand_dims(inv.get_tensor(), 1) for inv in invs_by_q]
-    return K.concatenate(tensors_by_q, axis=1)
+    tensors_by_q = [K.expand_dims(K.cast(inv.get_tensor(), 'float32'), 1) for inv in invs_by_q]
+    logits = K.concatenate(tensors_by_q, axis=1)
+    return logits
+
+def probits_from_invariants(invs, t=10):
+    logits = logit_tensor_from_invariants(invs)
+    probits = K.softmax(logits*t, axis=1)
+    probit_fn = K.function([invs[0].model.input], [probits])
+
+    def eval_probits(x):
+        res = []
+        for xi in x:
+            res.append(probit_fn([xi[np.newaxis]])[0])
+        return np.concatenate(res, axis=0)
+    
+    return eval_probits
+
+def probits_from_multi_invariants(invs_set, t=10):
+    logits_set = []
+    for invs in invs_set:
+        logits_set.append(logit_tensor_from_invariants(invs))
+    logits = sum(logits_set)
+    probits = K.softmax(logits*t, axis=1)
+    input_ph = [invs[0].model.input for invs in invs_set]
+    probit_fn = K.function(input_ph, [probits])
+
+    def eval_probits(x):
+        res = []
+        for xi in x:
+            inpt = [xi[np.newaxis] for i in invs_set]
+            res.append(probit_fn(inpt)[0])
+        return np.concatenate(res, axis=0)
+    
+    return eval_probits
