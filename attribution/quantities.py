@@ -34,7 +34,7 @@ class ClassQoi(Qoi):
         self.c = c
 
     def __call__(self, g):
-        return g[:, self.c]
+        return g.output[:, self.c]
 
 
 class ComparativeQoi(Qoi):

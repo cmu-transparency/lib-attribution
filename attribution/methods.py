@@ -138,6 +138,7 @@ class InternalInfluence(AttributionMethod):
         D = K.int_shape(self.z)[1:]
 
         grad_over_doi = K.mean(K.reshape(grad, ((N,-1)+D)), axis=1)
+        self.symbolic_grad = grad
 
         # Multiply by the activation if specified.
         if self.multiply_activation:
@@ -150,6 +151,7 @@ class InternalInfluence(AttributionMethod):
 
         else:
             attribution = grad_over_doi
+        self.shape_symbolic_attributions = attribution
 
         # Aggregate according to aggregation function.
 
