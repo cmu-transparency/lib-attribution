@@ -35,7 +35,18 @@ class InfluenceInvariants(object):
         acts = np.sign(self._attributer.get_attributions(
             x, batch_size=batch_size)).reshape(len(x), -1)
 
-        qs = self.QF(x)
+        if batch_size is None:
+            qs = self.QF(x)
+        elif isinstance(batch_size, int):
+            cb = 0
+            qs = []
+            while cb < len(x):
+                b = x[cb:cb + batch_size]
+                qs.append(self.QF(b))
+                cb += batch_size
+        else:
+            raise ValueError(
+                '`batch_size` must be either None or int: {}.'.format(batch_size))
 
         return acts, qs
 
