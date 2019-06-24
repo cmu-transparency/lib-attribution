@@ -4,6 +4,7 @@ import keras
 import keras.backend as K
 import copy
 
+
 class Literal(object):
 
     def __init__(self, layer, unit, op, value, attribution_unit=None):
@@ -17,10 +18,10 @@ class Literal(object):
         u_t = attribution_unit if attribution_unit is not None else self.attribution_unit
         assert u_t is not None, "Need to pass attribution unit tensor either directly or in constructor"
 
-        zeros = K.zeros_like(u_t)
-        ones = K.ones_like(u_t)
-        vals = zeros + self.value
-        u_bt = K.expand_dims(K.switch(self.op(u_t, vals), ones, zeros), 1)
+        zeros = K.zeros_like(u_t, K.floatx())
+        ones = K.ones_like(u_t, K.floatx())
+        vals=zeros + self.value
+        u_bt=K.expand_dims(K.switch(self.op(u_t, vals), ones, zeros), 1)
 
         return u_bt
 
@@ -28,19 +29,19 @@ class Literal(object):
         return copy.copy(self)
 
     def __str__(self):
-        op = '?'
+        op='?'
         if self.op == K.equal:
-            op = '='
+            op='='
         if self.op == K.not_equal:
-            op = '!='
+            op='!='
         if self.op == K.less:
-            op = '<'
+            op='<'
         if self.op == K.less_equal:
-            op = '<='
+            op='<='
         if self.op == K.greater:
-            op = '>'
+            op='>'
         if self.op == K.greater_equal:
-            op = '>='
+            op='>='
 
         return "{}[{}] {} {}".format(self.layer.name, self.unit, op, self.value)
 
@@ -49,25 +50,26 @@ class Clause(object):
     Conjunctive clause
     '''
     def __init__(self, literals):
-        self.literals = literals
+        self.literals=literals
 
     def add_literal(self, lit, copy_self=False):
-        t = copy.deepcopy(self) if copy_self else self
+        t=copy.deepcopy(self) if copy_self else self
         t.literals.append(lit)
         return t
 
     def get_tensor(self, attributers=None):
         if attributers is not None:
-            clause = [lit.get_tensor(attribution_unit=attributers[lit.layer].attribution_units[lit.unit]) for lit in self.literals]
+            clause=[lit.get_tensor(
+                attribution_unit=attributers[lit.layer].attribution_units[lit.unit]) for lit in self.literals]
         else:
-            clause = [lit.get_tensor() for lit in self.literals]
+            clause=[lit.get_tensor() for lit in self.literals]
 
         return K.expand_dims(K.all(K.concatenate(clause, axis=1), axis=1), axis=1)
         # return K.all(K.concatenate(clause, axis=1), axis=1, keepdims=True)
 
     def get_executable(self, model, attributers=None):
-        t = self.get_tensor(attributers=attributers)
-        exe = K.function([model.input], [t])
+        t=self.get_tensor(attributers=attributers)
+        exe=K.function([model.input], [t])
 
         return lambda x: exe([x])[0]
 
@@ -77,27 +79,27 @@ class Clause(object):
 class Invariant(object):
 
     def __init__(self, clauses, model, Q=None, support=None, precision=None):
-        self.clauses = clauses
-        self.Q = Q
-        self.support = support
-        self.precision = precision
-        self.model = model
-        self._T = None
-        self._exe = None
+        self.clauses=clauses
+        self.Q=Q
+        self.support=support
+        self.precision=precision
+        self.model=model
+        self._T=None
+        self._exe=None
 
     def add_clause(self, clause, copy_self=False):
-        t = copy.deepcopy(self) if copy_self else self
+        t=copy.deepcopy(self) if copy_self else self
         t.clauses.append(clause)
 
-        self._T = None
-        self._exe = None
+        self._T=None
+        self._exe=None
 
         return t
 
     def get_tensor(self, attributers=None):
         if self._T is None:
-            inv = [clause.get_tensor(attributers) for clause in self.clauses]
-            self._T = K.any(K.concatenate(inv, axis=1), axis=1)
+            inv=[clause.get_tensor(attributers) for clause in self.clauses]
+            self._T=K.any(K.concatenate(inv, axis=1), axis=1)
 
         return self._T
 
@@ -105,8 +107,8 @@ class Invariant(object):
         if self._exe is None:
             if self._T is None:
                 self.get_tensor(attributers=attributers)
-            exe = K.function([self.model.input], [self._T])
-            self._exe = lambda x: exe([x])[0]
+            exe=K.function([self.model.input], [self._T])
+            self._exe=lambda x: exe([x])[0]
 
         return self._exe
 
@@ -114,25 +116,26 @@ class Invariant(object):
         if self._exe is None:
             self.get_executable(attributers=attributers)
         if np.ndim(x) == K.ndim(self.model.input) - 1:
-            x = np.expand_dims(x, 0)
+            x=np.expand_dims(x, 0)
         if batch_size is None:
-            rv = self._exe(x)
+            rv=self._exe(x)
         elif isinstance(batch_size, int):
-            cb = 0
-            rv = []
+            cb=0
+            rv=[]
             while cb < len(x):
-                b = x[cb:cb+batch_size]
+                b=x[cb:cb + batch_size]
                 rv.append(self._exe(b))
                 cb += batch_size
-            rv = np.concatenate(rv, axis=0)
+            rv=np.concatenate(rv, axis=0)
         else:
             raise ValueError(
-                '`batch_size` must be either None or int: {}.'.format(batch_size))            
+                '`batch_size` must be either None or int: {}.'.format(batch_size))
 
         return rv
 
     def __str__(self):
-        s = "\nor\n".join(["(" + str(clause) + ")" for clause in self.clauses])
+        s="\nor\n".join(["(" + str(clause) + ")" for clause in self.clauses])
         s += "\n\t--> Q = {}".format(self.Q)
-        s += "\nsupport={:.3}, precision={:.3}".format(self.support, self.precision)
+        s += "\nsupport={:.3}, precision={:.3}".format(
+            self.support, self.precision)
         return s
