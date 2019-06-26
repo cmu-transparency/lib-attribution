@@ -16,6 +16,7 @@ from .distributions import Doi
 from .model_utils import top_slice, clone_model
 from .quantities import Qoi
 
+
 class InternalInfluence(AttributionMethod):
     '''
     Calculates attribution as the *Internal Influence* [1].
@@ -23,13 +24,14 @@ class InternalInfluence(AttributionMethod):
     [1] Leino et al. "Influence-directed Explanations for Deep Convolutional 
         Networks." 2018
     '''
+
     def __init__(self,
-            model_in, 
-            layer, 
-            agg_fn=K.max, 
-            Q=None, 
-            D='linear_interp',
-            multiply_activation=True):
+                 model_in,
+                 layer,
+                 agg_fn=K.max,
+                 Q=None,
+                 D='linear_interp',
+                 multiply_activation=True):
         '''
         Parameters
         ----------
@@ -99,7 +101,7 @@ class InternalInfluence(AttributionMethod):
             self.model, self.layer, input_tensor=self.z, clone=False)
 
         if Q is None:
-            # Get the maximum of the logits; this is the logit value for the 
+            # Get the maximum of the logits; this is the logit value for the
             # predicted class.
 
             # TODO(kleino): this needs to be the logit output.
@@ -130,21 +132,22 @@ class InternalInfluence(AttributionMethod):
 
         # Take gradient.
         grad = self.post_grad(K.gradients(
-            K.sum(self.Q), 
+            K.sum(self.Q),
             self.z))
+        self._sgrad = grad
 
         # Aggregate the gradient over the distribution of interest.
         N = K.shape(self.model.input)[0]
         D = K.int_shape(self.z)[1:]
 
-        grad_over_doi = K.mean(K.reshape(grad, ((N,-1)+D)), axis=1)
+        grad_over_doi = K.mean(K.reshape(grad, ((N, -1) + D)), axis=1)
         self.symbolic_grad = grad
 
         # Multiply by the activation if specified.
         if self.multiply_activation:
             if 'baseline' in self.z._doi_params:
                 attribution = grad_over_doi * (
-                    self.z._doi_parent - 
+                    self.z._doi_parent -
                     K.expand_dims(self.z._doi_params['baseline'], axis=0))
             else:
                 attribution = grad_over_doi * self.z._doi_parent
@@ -166,9 +169,9 @@ class InternalInfluence(AttributionMethod):
                 # If the aggregation function is given, treat each feature map
                 # as a unit of attribution.
                 if K.image_data_format() == 'channels_first':
-                    attribution = self.agg_fn(attribution, axis=(2,3))
+                    attribution = self.agg_fn(attribution, axis=(2, 3))
                 else:
-                    attribution = self.agg_fn(attribution, axis=(1,2))
+                    attribution = self.agg_fn(attribution, axis=(1, 2))
 
         else:
             raise ValueError(
@@ -181,7 +184,7 @@ class InternalInfluence(AttributionMethod):
 
     def compile(self):
         x = (
-            self.model.input if isinstance(self.model.input, list) else 
+            self.model.input if isinstance(self.model.input, list) else
             [self.model.input])
 
         doi_params = [self.z._doi_params[k] for k in self.z._doi_params]
@@ -189,10 +192,10 @@ class InternalInfluence(AttributionMethod):
         # If the model uses a learning phase (e.g., for dropout), we need to
         # make sure we evaluate the gradients in 'test' mode.
         learning_phase = (
-            [K.learning_phase()] if 
-                hasattr(self.model, 'uses_learning_phase') and 
-                self.model.uses_learning_phase and 
-                K.backend() == 'theano' else
+            [K.learning_phase()] if
+            hasattr(self.model, 'uses_learning_phase') and
+            self.model.uses_learning_phase and
+            K.backend() == 'theano' else
             [])
 
         attributions = self.get_sym_attributions()
@@ -209,16 +212,16 @@ class InternalInfluence(AttributionMethod):
 
         self.attribution_fn = attribution_fn
         self.is_compiled = True
-        
+
         return self
 
-    def get_attributions(self, 
-            x,
-            baseline=None, 
-            resolution=10, 
-            match_layer_shape=False,
-            batch_size=1,
-            **doi_params):
+    def get_attributions(self,
+                         x,
+                         baseline=None,
+                         resolution=10,
+                         match_layer_shape=False,
+                         batch_size=1,
+                         **doi_params):
         '''
         Parameters
         ----------
@@ -277,7 +280,7 @@ class InternalInfluence(AttributionMethod):
         else:
             used_batch = False
             x = np.expand_dims(x, axis=0)
-        
+
         # Collect the DOI parameters.
         if 'baseline' in self.z._doi_params:
             if baseline is None:
@@ -290,7 +293,7 @@ class InternalInfluence(AttributionMethod):
                     .format(baseline.shape, K.int_shape(self.z)[1:]))
 
             doi_params['baseline'] = baseline
-        
+
         doi_params['resolution'] = np.array(resolution, dtype='int32')
         try:
             used_doi_params = {k: doi_params[k] for k in self.z._doi_params}
@@ -304,7 +307,7 @@ class InternalInfluence(AttributionMethod):
             cb = 0
             attributions = []
             while cb < len(x):
-                b = x[cb:cb+batch_size]
+                b = x[cb:cb + batch_size]
                 attributions.append(self.attribution_fn(b, **used_doi_params))
                 cb += batch_size
             attributions = np.concatenate(attributions, axis=0)
@@ -323,17 +326,18 @@ class IntegratedGradients(InternalInfluence):
     '''
     [2] Sundararajan et al. "Axiomatic Attribution for Deep Networks." 2017
     '''
+
     def __init__(self, model):
         super(IntegratedGradients, self).__init__(model, 0, agg_fn=None)
 
-    def get_attributions(self, 
-            x,
-            baseline=None, 
-            resolution=10, 
-            match_layer_shape=False):
+    def get_attributions(self,
+                         x,
+                         baseline=None,
+                         resolution=10,
+                         match_layer_shape=False):
 
         return super(IntegratedGradients, self).get_attributions(
-            x, 
+            x,
             baseline=baseline,
             resolution=resolution,
             match_layer_shape=match_layer_shape)
@@ -344,6 +348,7 @@ class SaliencyMaps(InternalInfluence):
     [3] Simonyan et al. "Deep Inside Convolutional Networks: Visualizing Image 
         Classification Models and Saliency Maps." 2013
     '''
+
     def __init__(self, model):
         super(SaliencyMaps, self).__init__(
             model, 0, multiply_activation=False, agg_fn=None, D='point')
@@ -351,17 +356,17 @@ class SaliencyMaps(InternalInfluence):
     def get_attributions(self, x, match_layer_shape=False):
         return super(SaliencyMaps, self).get_attributions(
             x, match_layer_shape=match_layer_shape)
-        
+
 
 # TODO(kleino): retire this code since we're switching to `InternalInfluence`.
 class AumannShapley(AttributionMethod):
 
-    def __init__(self, 
-            model, 
-            layer, 
-            agg_fn=K.max, 
-            Q=None, 
-            multiply_activation=True):
+    def __init__(self,
+                 model,
+                 layer,
+                 agg_fn=K.max,
+                 Q=None,
+                 multiply_activation=True):
 
         AttributionMethod.__init__(self, model, layer)
 
@@ -383,16 +388,16 @@ class AumannShapley(AttributionMethod):
         inner_grad = self.post_grad(
             K.gradients(K.sum(self.Q), self.layer.output))
 
-        post_fn = lambda r: r.transpose((1,0))
+        def post_fn(r): return r.transpose((1, 0))
 
         # Get outputs for flat intermediate layers
         if K.ndim(self.layer.output) == 2:
             n_outs = K.int_shape(self.layer.output)[1]
-            layer_grads = [inner_grad[:,i] for i in range(n_outs)]
-            layer_outs = [self.layer.output[:,i] for i in range(n_outs)]
+            layer_grads = [inner_grad[:, i] for i in range(n_outs)]
+            layer_outs = [self.layer.output[:, i] for i in range(n_outs)]
             self.attribution_units = layer_outs
             self.p_fn = lambda x: x
-                        
+
         # Get outputs for convolutional intermediate layers
         elif K.ndim(self.layer.output) == 4:
             if self.agg_fn is None:
@@ -400,30 +405,32 @@ class AumannShapley(AttributionMethod):
                 layer_outs = K.batch_flatten(self.layer.output)
                 layer_grads = [inner_grad]
                 self.attribution_units = K.transpose(layer_outs)
-                post_fn = lambda r: r[0]
+                def post_fn(r): return r[0]
                 self.p_fn = lambda x: x
             else:
-                # If the aggregation function is given, treat each filter as a 
+                # If the aggregation function is given, treat each filter as a
                 # unit of attribution
                 if K.image_data_format() == 'channels_first':
                     n_outs = K.int_shape(self.layer.output)[1]
-                    sel_fn = lambda g, i: self.agg_fn(g[:,i,:,:], axis=(1,2))
+                    def sel_fn(g, i): return self.agg_fn(
+                        g[:, i, :, :], axis=(1, 2))
                     p_fn = K.function(
-                        [self.layer.output], 
-                        [self.agg_fn(self.layer.output, axis=(2,3))])
+                        [self.layer.output],
+                        [self.agg_fn(self.layer.output, axis=(2, 3))])
                     self.p_fn = lambda x: p_fn([x])[0]
                 else:
                     n_outs = K.int_shape(self.layer.output)[3]
-                    sel_fn = lambda g, i: self.agg_fn(g[:,:,:,i], axis=(1,2))
+                    def sel_fn(g, i): return self.agg_fn(
+                        g[:, :, :, i], axis=(1, 2))
                     p_fn = K.function(
-                        [self.layer.output], 
-                        [self.agg_fn(self.layer.output, axis=(1,2))])
+                        [self.layer.output],
+                        [self.agg_fn(self.layer.output, axis=(1, 2))])
                     self.p_fn = lambda x: p_fn([x])[0]
                 layer_grads = [sel_fn(inner_grad, i) for i in range(n_outs)]
                 layer_outs = [
                     sel_fn(self.layer.output, i) for i in range(n_outs)]
                 self.attribution_units = layer_outs
-            
+
         else:
             assert False, (
                 'Unsupported tensor shape: ndim=%d' % K.ndim(self.layer.output))
@@ -435,12 +442,12 @@ class AumannShapley(AttributionMethod):
         else:
             self.get_features = lambda x: x
 
-        if (hasattr(self.model, 'uses_learning_phase') and 
-                self.model.uses_learning_phase and 
+        if (hasattr(self.model, 'uses_learning_phase') and
+                self.model.uses_learning_phase and
                 K.backend() == 'theano'):
 
             grad_f = K.function(
-                [self.layer.output, K.learning_phase()], 
+                [self.layer.output, K.learning_phase()],
                 layer_grads)
             self.dF = lambda inp: post_fn(np.array(grad_f([inp, 0])))
         else:
@@ -449,14 +456,14 @@ class AumannShapley(AttributionMethod):
 
         self.is_compiled = True
         self.n_outs = n_outs
-            
+
         return self
 
-    def get_attributions(self, 
-            x, 
-            baseline=None, 
-            resolution=10, 
-            match_layer_shape=False):
+    def get_attributions(self,
+                         x,
+                         baseline=None,
+                         resolution=10,
+                         match_layer_shape=False):
 
         assert self.is_compiled, "Must compile before measuring attribution"
 
@@ -479,16 +486,16 @@ class AumannShapley(AttributionMethod):
                 (instance - baseline) * a / resolution + baseline)
 
         if self.multiply_activation:
-            attributions[:,:] *= (self.p_fn(instance) - self.p_fn(baseline))
+            attributions[:, :] *= (self.p_fn(instance) - self.p_fn(baseline))
 
-        if (match_layer_shape and 
-                np.prod(K.int_shape(self.layer.output)[1:])*len(x) == 
-                    np.prod(attributions.shape)):
+        if (match_layer_shape and
+                np.prod(K.int_shape(self.layer.output)[1:]) * len(x) ==
+                np.prod(attributions.shape)):
 
             attributions = attributions.reshape(
-                (len(x),)+K.int_shape(self.layer.output)[1:])
+                (len(x),) + K.int_shape(self.layer.output)[1:])
         elif self.agg_fn is None:
-            attributions = attributions.reshape(len(attributions),-1)
+            attributions = attributions.reshape(len(attributions), -1)
 
         # Return in the same format as used by the caller.
         if used_batch:
@@ -501,6 +508,7 @@ class Conductance(AttributionMethod):
     '''
     Paper: 
     '''
+
     def __init__(self, model, layer, agg_fn=K.max, Q=None):
         AttributionMethod.__init__(self, model, layer)
         self.agg_fn = agg_fn
@@ -516,15 +524,17 @@ class Conductance(AttributionMethod):
             assert False, "Unsupported backend: %s" % K.backend()
 
     def compile(self):
-        inner_grad = self.post_grad(K.gradients(K.sum(self.Q), self.layer.output))
+        inner_grad = self.post_grad(
+            K.gradients(K.sum(self.Q), self.layer.output))
 
         # Get outputs for flat intermediate layers
         if K.ndim(self.layer.output) == 2:
             n_outs = K.int_shape(self.layer.output)[1]
             layer_grads = inner_grad
             layer_outs = self.layer.output
-            self.attribution_units = [self.layer.output[:,i] for i in range(n_outs)]
-                        
+            self.attribution_units = [self.layer.output[:, i]
+                                      for i in range(n_outs)]
+
         # Get outputs for convolutional intermediate layers
         # We treat each filter as an output, as in the original paper
         elif K.ndim(self.layer.output) == 4:
@@ -532,32 +542,41 @@ class Conductance(AttributionMethod):
                 n_outs = int(np.prod(K.int_shape(self.layer.output)[1:]))
                 layer_grads = K.batch_flatten(inner_grad)
                 layer_outs = K.batch_flatten(self.layer.output)
-                self.attribution_units = [layer_outs[:,i] for i in range(n_outs)]
+                self.attribution_units = [layer_outs[:, i]
+                                          for i in range(n_outs)]
             else:
                 if K.image_data_format() == 'channels_first':
                     n_outs = K.int_shape(self.layer.output)[1]
-                    sel_fn = lambda g: self.agg_fn(g, axis=(2,3))
+                    def sel_fn(g): return self.agg_fn(g, axis=(2, 3))
                 else:
                     n_outs = K.int_shape(self.layer.output)[3]
-                    sel_fn = lambda g: self.agg_fn(g, axis=(1,2))
-                layer_grads = sel_fn(inner_grad) # (batch, feats)
-                layer_outs = sel_fn(self.layer.output) # (batch, feats)
-                self.attribution_units = [layer_outs[:,i] for i in range(n_outs)]
-            
+                    def sel_fn(g): return self.agg_fn(g, axis=(1, 2))
+                layer_grads = sel_fn(inner_grad)  # (batch, feats)
+                layer_outs = sel_fn(self.layer.output)  # (batch, feats)
+                self.attribution_units = [layer_outs[:, i]
+                                          for i in range(n_outs)]
+
         else:
-            assert False, "Unsupported tensor shape: ndim=%d" % K.ndim(self.layer.output)
+            assert False, "Unsupported tensor shape: ndim=%d" % K.ndim(
+                self.layer.output)
 
         if K.backend() == "theano":
-            jac = K.theano.gradient.jacobian(K.sum(layer_outs, axis=0), self.model.input)
-            outer_grads = [layer_grads*K.transpose(K.sum(jac, axis=(2,3,4)))]
-            post_fn = lambda r: r[0]
+            jac = K.theano.gradient.jacobian(
+                K.sum(layer_outs, axis=0), self.model.input)
+            outer_grads = [layer_grads *
+                           K.transpose(K.sum(jac, axis=(2, 3, 4)))]
+
+            def post_fn(r): return r[0]
         elif K.backend() == "tensorflow":
-            outer_grads = [layer_grads[:,i] * K.sum(self.post_grad(K.gradients(K.sum(layer_outs[:,i]), self.model.input)), axis=(1,2,3))
+            outer_grads = [layer_grads[:, i] * K.sum(self.post_grad(K.gradients(K.sum(layer_outs[:, i]), self.model.input)), axis=(1, 2, 3))
                            for i in range(n_outs)]
-            post_fn = lambda r: np.array(np.transpose(r)) #np.swapaxes(np.array(r),0,1)
+
+            # np.swapaxes(np.array(r),0,1)
+            def post_fn(r): return np.array(np.transpose(r))
 
         if hasattr(self.model, 'uses_learning_phase') and self.model.uses_learning_phase and K.backend() == 'theano':
-            grad_f = K.function([self.model.input, K.learning_phase()], outer_grads)
+            grad_f = K.function(
+                [self.model.input, K.learning_phase()], outer_grads)
             self.dF = lambda inp: post_fn(grad_f([inp, 0]))
         else:
             grad_f = K.function([self.model.input], outer_grads)
@@ -583,16 +602,20 @@ class Conductance(AttributionMethod):
             baseline = np.zeros_like(instance, dtype=np.float32)
         assert baseline.shape == instance.shape
 
-        attributions = np.zeros((instance.shape[0],self.n_outs)).astype(np.float32)
+        attributions = np.zeros(
+            (instance.shape[0], self.n_outs)).astype(np.float32)
 
         for a in range(len(instance)):
-            inst_a = instance[a][np.newaxis]-baseline[a]
-            scale = 1./resolution
-            inputs = baseline[a] + np.dot(np.repeat(inst_a, resolution, axis=0).T, np.arange(scale,1+scale,step=scale)).T
-            attributions[a] = self.dF(np.expand_dims(inputs, 0)).mean(axis=0)*np.sum(inst_a)
+            inst_a = instance[a][np.newaxis] - baseline[a]
+            scale = 1. / resolution
+            inputs = baseline[a] + np.dot(np.repeat(inst_a, resolution,
+                                                    axis=0).T, np.arange(scale, 1 + scale, step=scale)).T
+            attributions[a] = self.dF(np.expand_dims(
+                inputs, 0)).mean(axis=0) * np.sum(inst_a)
 
-        if match_layer_shape and np.prod(K.int_shape(self.layer.output)[1:])*len(instance) == np.prod(attributions.shape):
-            attributions = attributions.reshape((len(x),)+K.int_shape(self.layer.output)[1:])
+        if match_layer_shape and np.prod(K.int_shape(self.layer.output)[1:]) * len(instance) == np.prod(attributions.shape):
+            attributions = attributions.reshape(
+                (len(x),) + K.int_shape(self.layer.output)[1:])
 
         # Return in the same format as used by the caller.
         if used_batch:
@@ -615,34 +638,37 @@ class Activation(AttributionMethod):
         # Get outputs for flat intermediate layers.
         if K.ndim(self.layer.output) == 2:
             n_outs = K.int_shape(self.layer.output)[1]
-            layer_outs = [self.layer.output[:,i] for i in range(n_outs)]
-            post_fn = lambda r: np.swapaxes(r,0,1)
+            layer_outs = [self.layer.output[:, i] for i in range(n_outs)]
+            def post_fn(r): return np.swapaxes(r, 0, 1)
 
             self.attribution_units = layer_outs
-                        
+
         # Get outputs for convolutional intermediate layers.
         elif K.ndim(self.layer.output) == 4:
             if self.agg_fn is None:
                 n_outs = int(np.prod(K.int_shape(self.layer.output)[1:]))
-                # K.batch_flatten seems really slow at times, so we'll save the 
+                # K.batch_flatten seems really slow at times, so we'll save the
                 # reshape for numpy.
                 layer_outs = [self.layer.output]
-                post_fn = lambda r: r[0].reshape((len(r[0]), -1))
+                def post_fn(r): return r[0].reshape((len(r[0]), -1))
 
                 self.attribution_units = K.transpose(
                     K.batch_flatten(self.layer.output))
             else:
-                # If the aggregation function is given, treat each filter as a 
+                # If the aggregation function is given, treat each filter as a
                 # unit of attribution.
                 if K.image_data_format() == 'channels_first':
                     n_outs = K.int_shape(self.layer.output)[1]
-                    sel_fn = lambda g, i: self.agg_fn(g[:,i,:,:], axis=(1,2))
+                    def sel_fn(g, i): return self.agg_fn(
+                        g[:, i, :, :], axis=(1, 2))
                 else:
                     n_outs = K.int_shape(self.layer.output)[3]
-                    sel_fn = lambda g, i: self.agg_fn(g[:,:,:,i], axis=(1,2))
+                    def sel_fn(g, i): return self.agg_fn(
+                        g[:, :, :, i], axis=(1, 2))
                 layer_outs = [
                     sel_fn(self.layer.output, i) for i in range(n_outs)]
-                post_fn = lambda r: np.swapaxes(r,0,1)
+
+                def post_fn(r): return np.swapaxes(r, 0, 1)
 
                 self.attribution_units = layer_outs
         else:
@@ -650,12 +676,12 @@ class Activation(AttributionMethod):
                 'Unsupported tensor shape: ndim={}'
                 .format(K.ndim(self.layer.output)))
 
-        if (hasattr(self.model, 'uses_learning_phase') and 
-                self.model.uses_learning_phase and 
+        if (hasattr(self.model, 'uses_learning_phase') and
+                self.model.uses_learning_phase and
                 K.backend() == 'theano'):
 
             grad_f = K.function(
-                [self.model.input, K.learning_phase()], 
+                [self.model.input, K.learning_phase()],
                 layer_outs)
             self.dF = lambda inp: post_fn(np.array(grad_f([inp, 0])))
 
@@ -665,15 +691,15 @@ class Activation(AttributionMethod):
 
         self.is_compiled = True
         self.n_outs = n_outs
-            
+
         return self
 
-    def get_attributions(self, 
-            x, 
-            baseline=None, 
-            resolution=10, 
-            batch_size=None,
-            match_layer_shape=False):
+    def get_attributions(self,
+                         x,
+                         baseline=None,
+                         resolution=10,
+                         batch_size=None,
+                         match_layer_shape=False):
 
         assert self.is_compiled, 'Must compile before measuring attribution.'
 
@@ -690,7 +716,7 @@ class Activation(AttributionMethod):
             cb = 0
             attributions = []
             while cb < len(x):
-                b = x[cb:cb+batch_size]
+                b = x[cb:cb + batch_size]
                 attributions.append(self.dF(b))
                 cb += batch_size
             attributions = np.concatenate(attributions, axis=0)
@@ -698,12 +724,12 @@ class Activation(AttributionMethod):
             raise ValueError(
                 '`batch_size` must be either None or int: {}.'.format(batch_size))
 
-        if (match_layer_shape and 
-                np.prod(K.int_shape(self.layer.output)[1:])*len(instance) == 
-                    np.prod(attributions.shape)):
+        if (match_layer_shape and
+                np.prod(K.int_shape(self.layer.output)[1:]) * len(instance) ==
+                np.prod(attributions.shape)):
 
             attributions = attributions.reshape(
-                (len(x),)+K.int_shape(self.layer.output)[1:])
+                (len(x),) + K.int_shape(self.layer.output)[1:])
 
         # Return in the same format as used by the caller.
         return attributions if used_batch else attributions[0]
