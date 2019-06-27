@@ -80,13 +80,13 @@ def do_total(x, model, act_invs, inf_invs, batch_size):
         print('\tlayer {}'.format(layer), end=' ')
         sys.stdout.flush()
         time0 = time.time()
-        n_per_act, sup_act_te, prec_act_te = tally_total_invs(
+        n_per_act, sup_act_te, prec_act_te = tally_total_stats(
             act_invs[layer], model, x, batch_size=batch_size)
         time1 = time.time()
         print('[act: {:.2f}]'.format(time1 - time0), end=' ')
         sys.stdout.flush()
         time0 = time.time()
-        n_per_inf, sup_inf_te, prec_inf_te = tally_total_invs(
+        n_per_inf, sup_inf_te, prec_inf_te = tally_total_stats(
             inf_invs[layer], model, x, batch_size=batch_size)
         time1 = time.time()
         print('[inf: {:.2f}]'.format(time1 - time0))

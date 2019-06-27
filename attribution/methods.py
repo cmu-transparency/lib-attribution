@@ -405,7 +405,7 @@ class AumannShapley(AttributionMethod):
                 layer_outs = K.batch_flatten(self.layer.output)
                 layer_grads = [inner_grad]
                 self.attribution_units = K.transpose(layer_outs)
-                def post_fn(r): return r[0]
+                # def post_fn(r): return r[0]
                 self.p_fn = lambda x: x
             else:
                 # If the aggregation function is given, treat each filter as a

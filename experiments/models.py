@@ -3,8 +3,10 @@ import os
 import keras
 import numpy as np
 
+
 def get_available_models():
     return ['lfw']
+
 
 def get_lfw_data():
     cdir = os.path.dirname(os.path.realpath(__file__))
@@ -14,21 +16,24 @@ def get_lfw_data():
 
         return im_tr, y_tr, im_te, y_te
 
-def get_lfw_model(in_shape=(64,64,3), out_shape=5, trained=False):
-    inp = keras.layers.Input(shape=in_shape)
-    out = keras.layers.Conv2D(128, (3,3), activation='relu')(inp)
-    out = keras.layers.MaxPooling2D(pool_size=(2,2))(out)
-    out = keras.layers.Conv2D(64, (3,3), activation='relu')(out)
-    out = keras.layers.MaxPooling2D(pool_size=(2,2))(out)
-    out = keras.layers.Conv2D(32, (3,3), activation='relu')(out)
-    out = keras.layers.MaxPooling2D(pool_size=(2,2))(out)
-    out = keras.layers.Conv2D(16, (3,3), activation='relu')(out)
-    out = keras.layers.MaxPooling2D(pool_size=(2,2))(out)
+
+def get_lfw_model(in_shape=(64, 64, 3), out_shape=5, trained=False):
+    inp = keras.layers.Input(shape=in_shape, name='features')
+    out = keras.layers.Conv2D(128, (3, 3), activation='relu')(inp)
+    out = keras.layers.MaxPooling2D(pool_size=(2, 2))(out)
+    out = keras.layers.Conv2D(64, (3, 3), activation='relu')(out)
+    out = keras.layers.MaxPooling2D(pool_size=(2, 2))(out)
+    out = keras.layers.Conv2D(32, (3, 3), activation='relu')(out)
+    out = keras.layers.MaxPooling2D(pool_size=(2, 2))(out)
+    out = keras.layers.Conv2D(16, (3, 3), activation='relu')(out)
+    out = keras.layers.MaxPooling2D(pool_size=(2, 2))(out)
     out = keras.layers.Flatten()(out)
     out = keras.layers.Dense(16, activation='relu')(out)
-    out = keras.layers.Dense(out_shape, activation='softmax')(out)
+    out = keras.layers.Dense(out_shape, name='logits')(out)
+    out = keras.layers.Activation('softmax', name='probs')(out)
     model = keras.Model(inp, out)
-    model.compile(optimizer=keras.optimizers.Adam(), loss='categorical_crossentropy', metrics=['acc'])
+    model.compile(optimizer=keras.optimizers.Adam(),
+                  loss='categorical_crossentropy', metrics=['acc'])
     model.summary()
 
     cdir = os.path.dirname(os.path.realpath(__file__))
@@ -37,11 +42,13 @@ def get_lfw_model(in_shape=(64,64,3), out_shape=5, trained=False):
 
     return model
 
+
 def get_model(name, **kwargs):
     if name == 'lfw':
         return get_lfw_model(**kwargs)
     else:
         raise ValueError('unknown model: {}'.format(name))
+
 
 def get_data(name, **kwargs):
     if name == 'lfw':

@@ -81,7 +81,6 @@ def get_invariant_units(inv):
         elif isinstance(c, Clause):
             units.extend(list(get_clause_units(c)))
 
-    print(set(units))
     return set(units)
 
 

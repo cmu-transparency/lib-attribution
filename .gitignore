@@ -2,3 +2,4 @@
 .vscode/settings.json
 *.pyc
 experiments/interact.py
+examples/.ipynb_checkpoints/*
