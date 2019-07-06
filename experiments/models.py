@@ -3,9 +3,43 @@ import os
 import keras
 import numpy as np
 
+from keras.datasets import mnist
+from keras.utils import to_categorical
+
 
 def get_available_models():
-    return ['lfw']
+    return ['lfw', 'mnist']
+
+
+def get_mnist_data():
+    (x_tr, y_tr), (x_te, y_te) = mnist.load_data()
+    x_tr, x_te = np.expand_dims(x_tr, 3), np.expand_dims(x_te, 3)
+    y_tr, y_te = to_categorical(y_tr, 10), to_categorical(y_te, 10)
+
+    return x_tr, y_tr, x_te, y_te
+
+
+def get_mnist_model(in_shape=(28, 28, 1), out_shape=10, trained=False):
+    inp = keras.layers.Input(shape=in_shape, name='features')
+    out = keras.layers.Conv2D(32, (5, 5))(inp)
+    out = keras.layers.Activation('relu')(out)
+    out = keras.layers.Conv2D(32, (3, 3))(out)
+    out = keras.layers.Activation('relu')(out)
+    out = keras.layers.Conv2D(16, (3, 3))(out)
+    out = keras.layers.Activation('relu')(out)
+    out = keras.layers.Flatten()(out)
+    out = keras.layers.Dense(10, name='logits')(out)
+    out = keras.layers.Activation('softmax', name='probs')(out)
+    model = keras.Model(inp, out)
+    model.compile(optimizer=keras.optimizers.Adam(),
+                  loss='categorical_crossentropy', metrics=['acc'])
+    model.summary()
+
+    cdir = os.path.dirname(os.path.realpath(__file__))
+    if trained and os.path.isfile(os.path.join(cdir, 'weights', 'mnist.h5')):
+        model.load_weights(os.path.join(cdir, 'weights', 'mnist.h5'))
+
+    return model
 
 
 def get_lfw_data():
@@ -37,8 +71,8 @@ def get_lfw_model(in_shape=(64, 64, 3), out_shape=5, trained=False):
     model.summary()
 
     cdir = os.path.dirname(os.path.realpath(__file__))
-    if trained and os.path.isfile(os.path.join(cdir, 'models', 'lfw.h5')):
-        model.load_weights(os.path.join(cdir, 'models', 'lfw.h5'))
+    if trained and os.path.isfile(os.path.join(cdir, 'weights', 'lfw.h5')):
+        model.load_weights(os.path.join(cdir, 'weights', 'lfw.h5'))
 
     return model
 
@@ -46,6 +80,8 @@ def get_lfw_model(in_shape=(64, 64, 3), out_shape=5, trained=False):
 def get_model(name, **kwargs):
     if name == 'lfw':
         return get_lfw_model(**kwargs)
+    elif name == 'mnist':
+        return get_mnist_model(**kwargs)
     else:
         raise ValueError('unknown model: {}'.format(name))
 
@@ -53,5 +89,7 @@ def get_model(name, **kwargs):
 def get_data(name, **kwargs):
     if name == 'lfw':
         return get_lfw_data(**kwargs)
+    elif name == 'mnist':
+        return get_mnist_data(**kwargs)
     else:
         raise ValueError('unknown model: {}'.format(name))
