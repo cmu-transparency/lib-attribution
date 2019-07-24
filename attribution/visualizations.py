@@ -74,8 +74,8 @@ class TopKWithBlur(VisualizationMethod):
                     x[i], match_layer_shape=True)
             else:
                 input_attrs = np.zeros_like(attribs[i])
-                input_attrs[order[i]] = x[i].flatten()[order[i]]
-                input_attrs = input_attrs.reshape(x[i].shape)
+                input_attrs[order[i]] = x[i].flatten()[order[i]]  # pylint: disable=unsupported-assignment-operation
+                input_attrs = input_attrs.reshape(x[i].shape)  # pylint: disable=no-member
 
             if K.image_data_format() == 'channels_first':
                 input_attrs = input_attrs.mean(axis=0)
@@ -150,6 +150,8 @@ class UnitsWithBlur(VisualizationMethod):
                      for j in range(len(self.units))])
             infl = AumannShapley(self.model, 0, Q=Q, agg_fn=None).compile()
 
+        order = self.units
+
         vis = []
         masks = []
         for i in range(len(x)):
@@ -159,8 +161,8 @@ class UnitsWithBlur(VisualizationMethod):
                     x[i], match_layer_shape=True)
             else:
                 input_attrs = np.zeros_like(attribs[i])
-                input_attrs[order[i]] = x[i].flatten()[order[i]]
-                input_attrs = input_attrs.reshape(x[i].shape)
+                input_attrs[order[i]] = x[i].flatten()[order[i]]  # pylint: disable=unsupported-assignment-operation
+                input_attrs = input_attrs.reshape(x[i].shape)  # pylint: disable=no-member
 
             if K.image_data_format() == 'channels_first':
                 input_attrs = input_attrs.mean(axis=0)
