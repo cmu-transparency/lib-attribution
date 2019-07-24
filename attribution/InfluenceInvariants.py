@@ -44,6 +44,7 @@ class InfluenceInvariants(object):
                 b = x[cb:cb + batch_size]
                 qs.append(self.QF(b))
                 cb += batch_size
+            qs = np.concatenate(qs)
         else:
             raise ValueError(
                 '`batch_size` must be either None or int: {}.'.format(batch_size))
@@ -73,6 +74,15 @@ class InfluenceInvariants(object):
         assert self._is_compiled
 
         feats, y = self._get_influence(x, batch_size=batch_size)
+        labelmap = {}
+        cl = 0
+        obs_labels = y[:]
+        obs_labels.sort()
+        for label in obs_labels:
+            if not label in labelmap.values():
+                labelmap[cl] = label
+                cl += 1
+
         clf = tree.DecisionTreeClassifier(**kwargs)
         clf = clf.fit(feats, y)
 
@@ -85,6 +95,7 @@ class InfluenceInvariants(object):
             if(clf.tree_.children_left[node] != clf.tree_.children_right[node]):
                 unit = clf.tree_.feature[node]
                 au = K.sign(self._attributer.symbolic_attributions[:, unit])
+                # au = self._attributer.symbolic_attributions[:, unit]
                 lit_f = Literal(self.layer, unit, K.less_equal,
                                 clf.tree_.threshold[node], attribution_unit=au)
                 lit_t = Literal(self.layer, unit, K.greater,
@@ -95,12 +106,13 @@ class InfluenceInvariants(object):
                               clause.add_literal(lit_t, copy_self=True)))
             else:
                 q = clf.tree_.value[node].argmax()
+                mq = labelmap[q]
                 support = clf.tree_.value[node, 0,
-                                          q] / (len(np.where(y == q)[0]))
+                                          q] / (len(np.where(y == mq)[0]))
                 precision = clf.tree_.value[node, 0,
                                             q] / clf.tree_.value[node].sum()
                 if (min_support is None or min_support <= support) and (min_precision is None or min_precision <= precision):
                     invs.append(Invariant(
-                        [clause], self._attributer.model, Q=q, support=support, precision=precision))
+                        [clause], self._attributer.model, Q=mq, support=support, precision=precision))
 
         return invs
