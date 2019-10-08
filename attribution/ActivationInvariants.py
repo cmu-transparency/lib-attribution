@@ -44,7 +44,19 @@ class ActivationInvariants(object):
                 [self._attributers[i].get_attributions(x).reshape(len(x), -1)
                  for i in range(len(self._attributers))], axis=1)
 
-        qs = np.concatenate([self.QF(x[batch_size*i:batch_size*(i+1)]) for i in range(0, int(math.ceil(len(x)/batch_size)))], axis=0)
+        if batch_size is None:
+            qs = self.QF(x)
+        elif isinstance(batch_size, int):
+            cb = 0
+            qs = []
+            while cb < len(x):
+                b = x[cb:cb + batch_size]
+                qs.append(self.QF(b))
+                cb += batch_size
+            qs = np.concatenate(qs)
+        else:
+            raise ValueError(
+                '`batch_size` must be either None or int: {}.'.format(batch_size))
 
         return acts, qs
 
