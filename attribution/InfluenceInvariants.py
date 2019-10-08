@@ -33,7 +33,7 @@ class InfluenceInvariants(object):
             x = np.expand_dims(x, axis=0)
 
         acts = np.sign(self._attributer.get_attributions(
-            x, batch_size=batch_size)).reshape(len(x), -1)
+            x, batch_size=batch_size, resolution=1)).reshape(len(x), -1)
 
         if batch_size is None:
             qs = self.QF(x)

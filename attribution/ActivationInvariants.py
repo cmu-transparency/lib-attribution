@@ -1,4 +1,5 @@
 import numpy as np
+import math
 
 import keras
 import keras.backend as K
@@ -8,6 +9,7 @@ from sklearn import tree
 from .methods import Activation
 from .invariant import Literal, Clause, Invariant
 
+
 class ActivationInvariants(object):
 
     def __init__(self, model, layers=None, agg_fn=K.max, Q=None, binary_feats=True):
@@ -16,11 +18,13 @@ class ActivationInvariants(object):
         self.layers = layers
         self.binary_feats = binary_feats
         if layers is None:
-            self.layers = [model.layers[i] for i in range(1, len(self.model.layers)-1)]
+            self.layers = [model.layers[i] for i in range(1, len(self.model.layers) - 1)]
         elif isinstance(layers[0], int):
             self.layers = [model.layers[i] for i in layers]
         if Q is None:
             self.Q = K.argmax(model.output, axis=1)
+        else:
+            self.Q = Q
 
         self._attributers = [Activation(model, layer, agg_fn=agg_fn) for layer in self.layers]
         self._is_compiled = False
@@ -33,14 +37,14 @@ class ActivationInvariants(object):
 
         if self.binary_feats:
             acts = np.concatenate(
-                    [np.where(self._attributers[i].get_attributions(x, batch_size=batch_size) != 0., 1, 0).reshape(len(x), -1)
-                        for i in range(len(self._attributers))], axis=1)
+                [np.where(self._attributers[i].get_attributions(x, batch_size=batch_size) > 0, 1, 0).reshape(len(x), -1)
+                 for i in range(len(self._attributers))], axis=1)
         else:
             acts = np.concatenate(
-                    [self._attributers[i].get_attributions(x).reshape(len(x),-1)
-                        for i in range(len(self._attributers))], axis=1)
+                [self._attributers[i].get_attributions(x).reshape(len(x), -1)
+                 for i in range(len(self._attributers))], axis=1)
 
-        qs = self.QF(x)
+        qs = np.concatenate([self.QF(x[batch_size*i:batch_size*(i+1)]) for i in range(0, int(math.ceil(len(x)/batch_size)))], axis=0)
 
         return acts, qs
 
@@ -51,15 +55,15 @@ class ActivationInvariants(object):
         f_Q = K.function([self.model.input], [self.Q])
         self.QF = lambda x: f_Q([x])[0]
 
-        zero_input = np.zeros(shape=(1,)+K.int_shape(self.model.input)[1:])
+        zero_input = np.zeros(shape=(1,) + K.int_shape(self.model.input)[1:])
         self._attrib_shapes = [attrib.get_attributions(zero_input).shape[1:] for attrib in self._attributers]
         self._attrib_cards = [int(np.prod(s)) for s in self._attrib_shapes]
 
         feat_ranges = []
         cur = 0
         for i in range(len(self.layers)):
-            n = cur+self._attrib_cards[i]
-            feat_ranges.append((cur,n-1))
+            n = cur + self._attrib_cards[i]
+            feat_ranges.append((cur, n - 1))
             cur = n
         self._feat_ranges = feat_ranges
 
@@ -75,7 +79,7 @@ class ActivationInvariants(object):
             for i in range(len(self._feat_ranges)):
                 l, h = self._feat_ranges[i]
                 if l <= feat and feat <= h:
-                    return i, self.layers[i], feat-l
+                    return i, self.layers[i], feat - l
             return None
 
         feats, y = self._get_activations(x, batch_size=batch_size)
@@ -98,14 +102,14 @@ class ActivationInvariants(object):
                     thresh = clf.tree_.threshold[node]
                     lit_f = Literal(self.layers[layer], unit, K.less_equal, thresh, attribution_unit=au)
                     lit_t = Literal(self.layers[layer], unit, K.greater, thresh, attribution_unit=au)
-                stack.append((clf.tree_.children_left[node], 
-                                clause.add_literal(lit_f, copy_self=True)))
-                stack.append((clf.tree_.children_right[node], 
-                                clause.add_literal(lit_t, copy_self=True)))
+                stack.append((clf.tree_.children_left[node],
+                              clause.add_literal(lit_f, copy_self=True)))
+                stack.append((clf.tree_.children_right[node],
+                              clause.add_literal(lit_t, copy_self=True)))
             else:
                 q = clf.tree_.value[node].argmax()
-                support = clf.tree_.value[node,0,q]/(len(np.where(y == q)[0]))
-                precision = clf.tree_.value[node,0,q]/clf.tree_.value[node].sum()
+                support = clf.tree_.value[node, 0, q] / (len(np.where(y == q)[0]))
+                precision = clf.tree_.value[node, 0, q] / clf.tree_.value[node].sum()
                 if (min_support is None or min_support <= support) and (min_precision is None or min_precision <= precision):
                     invs.append(Invariant([clause], self.model, Q=q, support=support, precision=precision))
 
