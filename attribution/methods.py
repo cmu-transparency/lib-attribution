@@ -25,13 +25,14 @@ class InternalInfluence(AttributionMethod):
         Networks." 2018
     '''
 
-    def __init__(self,
-                 model_in,
-                 layer,
-                 agg_fn=K.max,
-                 Q=None,
-                 D='linear_interp',
-                 multiply_activation=True):
+    def __init__(
+            self,
+            model_in,
+            layer,
+            agg_fn=K.max,
+            Q=None,
+            D='linear_interp',
+            multiply_activation=True):
         '''
         Parameters
         ----------
@@ -215,13 +216,14 @@ class InternalInfluence(AttributionMethod):
 
         return self
 
-    def get_attributions(self,
-                         x,
-                         baseline=None,
-                         resolution=10,
-                         match_layer_shape=False,
-                         batch_size=1,
-                         **doi_params):
+    def get_attributions(
+            self,
+            x,
+            baseline=None,
+            resolution=10,
+            match_layer_shape=False,
+            batch_size=1,
+            **doi_params):
         '''
         Parameters
         ----------
@@ -330,11 +332,12 @@ class IntegratedGradients(InternalInfluence):
     def __init__(self, model):
         super(IntegratedGradients, self).__init__(model, 0, agg_fn=None)
 
-    def get_attributions(self,
-                         x,
-                         baseline=None,
-                         resolution=10,
-                         match_layer_shape=False):
+    def get_attributions(
+            self,
+            x,
+            baseline=None,
+            resolution=10,
+            match_layer_shape=False):
 
         return super(IntegratedGradients, self).get_attributions(
             x,
@@ -361,12 +364,13 @@ class SaliencyMaps(InternalInfluence):
 # TODO(kleino): retire this code since we're switching to `InternalInfluence`.
 class AumannShapley(AttributionMethod):
 
-    def __init__(self,
-                 model,
-                 layer,
-                 agg_fn=K.max,
-                 Q=None,
-                 multiply_activation=True):
+    def __init__(
+            self,
+            model,
+            layer,
+            agg_fn=K.max,
+            Q=None,
+            multiply_activation=True):
 
         AttributionMethod.__init__(self, model, layer)
 
@@ -462,11 +466,12 @@ class AumannShapley(AttributionMethod):
 
         return self
 
-    def get_attributions(self,
-                         x,
-                         baseline=None,
-                         resolution=10,
-                         match_layer_shape=False):
+    def get_attributions(
+            self,
+            x,
+            baseline=None,
+            resolution=10,
+            match_layer_shape=False):
 
         assert self.is_compiled, "Must compile before measuring attribution"
 
@@ -697,12 +702,13 @@ class Activation(AttributionMethod):
 
         return self
 
-    def get_attributions(self,
-                         x,
-                         baseline=None,
-                         resolution=10,
-                         batch_size=None,
-                         match_layer_shape=False):
+    def get_attributions(
+            self,
+            x,
+            baseline=None,
+            resolution=10,
+            batch_size=None,
+            match_layer_shape=False):
 
         assert self.is_compiled, 'Must compile before measuring attribution.'
 
