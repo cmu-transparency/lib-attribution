@@ -48,10 +48,6 @@ Library providing attribution methods for Keras models. Supports Tensorflow and 
 
   - TODO: Guided back-propagation
 
-- ```ActivationInvariants```
-
-- ```InfluenceInvariants```
-
 - ```VisualizationMethod```
 
   - Required methods:
