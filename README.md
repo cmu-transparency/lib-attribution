@@ -1,6 +1,22 @@
 # lib-attribution
 Library providing attribution methods for Keras models. Supports Tensorflow and Theano backends.
 
+This code is provided as-is, and is intened simply to accompany the paper, "Influence-directed Explanations for Convolutional Neural Networks" [(arXiv)](https://arxiv.org/pdf/1802.03788.pdf).
+
+If using the code from this repository, please use the following citation:
+
+```
+@INPROCEEDINGS{
+  leino18influence,
+  author={Klas Leino and Shayak Sen and Anupam Datta and Matt Fredrikson and Linyi Li},
+  booktitle={2018 IEEE International Test Conference (ITC)},
+  title={Influence-Directed Explanations for Deep Convolutional Networks},
+  year={2018},
+}
+```
+
+
+
 ## Requirements
 
   - Keras (cannot assume tensorflow or theano)
